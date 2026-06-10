@@ -1,0 +1,15 @@
+*
+
+!openbox-x-copilotkit/
+!openbox-x-copilotkit/**
+
+openbox-x-copilotkit/.git
+openbox-x-copilotkit/.next
+!openbox-x-copilotkit/.next/
+!openbox-x-copilotkit/.next/standalone/
+!openbox-x-copilotkit/.next/standalone/**
+!openbox-x-copilotkit/.next/static/
+!openbox-x-copilotkit/.next/static/**
+openbox-x-copilotkit/node_modules
+openbox-x-copilotkit/agent/.langgraph_api
+openbox-x-copilotkit/agent/node_modules

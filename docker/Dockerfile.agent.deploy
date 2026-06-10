@@ -1,0 +1,28 @@
+FROM node:22-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache git openssh-client
+RUN mkdir -p -m 0700 /root/.ssh \
+  && ssh-keyscan github.com >> /root/.ssh/known_hosts
+
+COPY openbox-x-copilotkit/agent/package.json ./
+COPY openbox-x-copilotkit/agent/package-lock.json ./
+RUN --mount=type=ssh --mount=type=secret,id=github_token,required=false \
+  set -eu; \
+  token_file="/run/secrets/github_token"; \
+  if [ -s "$token_file" ]; then \
+    token="$(cat "$token_file")"; \
+    git config --global --add url."https://x-access-token:${token}@github.com/".insteadOf "ssh://git@github.com/"; \
+    git config --global --add url."https://x-access-token:${token}@github.com/".insteadOf "git@github.com:"; \
+  fi; \
+  npm ci --omit=dev; \
+  rm -f /root/.gitconfig
+
+COPY openbox-x-copilotkit/agent/langgraph.json ./
+COPY openbox-x-copilotkit/agent/tsconfig.json ./
+COPY openbox-x-copilotkit/agent/src/ ./src/
+
+EXPOSE 8123
+
+CMD ["npx", "@langchain/langgraph-cli@1.2.1", "dev", "--host", "0.0.0.0", "--port", "8123", "--no-browser"]
