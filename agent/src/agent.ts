@@ -150,9 +150,8 @@ export const graph = createAgent({
         openbox_resume_governed_action returns
         a structured UI result, do not repeat the whole request in prose. If
         the result contains CopilotKit A2UI operations, those operations are
-        the business result UI. Keep the final message to a short status
-        sentence because the OpenBox policy card and CopilotKit A2UI business
-        result are the primary UI.
+        the business result UI. Your final assistant message after that tool
+        result must be exactly: Done.
       - If an OpenBox tool returns status "halted" or "session_halted", stop the
         task. Tell the user the session is halted and they need to start a new
         conversation or reset the demo before trying another governed action.
