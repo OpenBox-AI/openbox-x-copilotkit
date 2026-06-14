@@ -31,10 +31,22 @@ test.describe("OpenBox x CopilotKit local demo", () => {
 
   test("exception report prompt renders redaction", async ({ page }) => {
     await runSuggestion(page, "Prepare Exception Report", /Allowed|Redacted|Constrained/i);
+    await expectGeneratedResultNotToContain(page, [
+      "acct_24819",
+      "$12,400",
+      "riley.morgan@example.com",
+      "+1 415 555 0198",
+    ]);
   });
 
   test("customer update prompt renders final-output governance", async ({ page }) => {
     await runSuggestion(page, "Draft Customer Update", /Allowed|Redacted|Constrained/i);
+    await expectGeneratedResultNotToContain(page, [
+      "acct_24819",
+      "$12,400",
+      "riley.morgan@example.com",
+      "+1 415 555 0198",
+    ]);
   });
 
   test("exception id export prompt renders goal drift block", async ({ page }) => {
@@ -198,6 +210,15 @@ async function expectGeneratedResultWhenReleased(page: Page) {
     .innerText({ timeout: OPENBOX_VISIBLE_TIMEOUT_MS });
   if (/Allowed|Redacted|Constrained/i.test(cardText)) {
     await expectGeneratedResult(page);
+  }
+}
+
+async function expectGeneratedResultNotToContain(page: Page, values: string[]) {
+  const result = page.locator(".openbox-a2ui-result").last();
+  await expect(result).toBeVisible({ timeout: OPENBOX_VISIBLE_TIMEOUT_MS });
+  const text = await result.innerText({ timeout: OPENBOX_VISIBLE_TIMEOUT_MS });
+  for (const value of values) {
+    expect(text).not.toContain(value);
   }
 }
 

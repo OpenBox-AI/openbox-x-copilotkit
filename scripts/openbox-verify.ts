@@ -924,6 +924,8 @@ function assertNoRawSensitiveValues(result: GovernedActionResult) {
   const forbiddenPatterns = [
     /\b[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}\b/,
     /\bacct_[a-z0-9_]+\b/i,
+    /\$14,400\b/,
+    /\$12,400\b/,
     /\b(?:agent|session|workflow|policy|source)_[a-z0-9_-]{8,}\b/i,
     /\+\d[\d\s().-]{8,}\d/,
   ];
