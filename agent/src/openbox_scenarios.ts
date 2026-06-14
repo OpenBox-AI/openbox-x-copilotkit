@@ -30,7 +30,7 @@ const DIRECT_GOVERNED_ACTIONS = [
   "draft_policy_constrained_message",
 ] as const;
 const APPROVAL_GOVERNED_ACTIONS = ["issue_large_refund"] as const;
-const HANDOFF_TEMPLATES = ["minimal", "growth", "sensitive"] as const;
+const HANDOFF_CHOICES = ["minimal", "growth", "sensitive"] as const;
 const SENSITIVITY_VALUES = ["public", "internal", "confidential", "restricted"] as const;
 
 const GovernedActionSchema = z.enum(GOVERNED_ACTIONS);
@@ -47,8 +47,8 @@ const nullableStringArray = (description: string) =>
   z.union([z.array(z.string()), z.null()]).optional().describe(description);
 const nullableSensitivity = (description: string) =>
   z.union([z.enum(SENSITIVITY_VALUES), z.null()]).optional().describe(description);
-const nullableHandoffTemplate = (description: string) =>
-  z.union([z.enum(HANDOFF_TEMPLATES), z.null()]).optional().describe(description);
+const nullableHandoffChoice = (description: string) =>
+  z.union([z.enum(HANDOFF_CHOICES), z.null()]).optional().describe(description);
 
 export const openbox_governed_action = tool(
   async (input: {
@@ -60,7 +60,7 @@ export const openbox_governed_action = tool(
     audience?: string | null;
     manualInput?: string | null;
     sensitivity?: "public" | "internal" | "confidential" | "restricted" | null;
-    handoffTemplate?: "minimal" | "growth" | "sensitive" | null;
+    choiceId?: "minimal" | "growth" | "sensitive" | null;
   }, config) => {
     const request = requireRequest(dropNullValues(input));
     return timeTool("openbox_governed_action", async () => {
@@ -98,7 +98,7 @@ export const openbox_governed_action = tool(
       audience: nullableString("Audience when applicable; otherwise null."),
       manualInput: nullableString("Final user-edited text when applicable; otherwise null."),
       sensitivity: nullableSensitivity("Sensitivity when applicable; otherwise null."),
-      handoffTemplate: nullableHandoffTemplate("Handoff template when applicable; otherwise null."),
+      choiceId: nullableHandoffChoice("Selected handoff choice when applicable; otherwise null."),
     }),
   },
 );
@@ -158,7 +158,7 @@ export const openbox_resume_governed_action = tool(
     audience?: string | null;
     manualInput?: string | null;
     sensitivity?: "public" | "internal" | "confidential" | "restricted" | null;
-    handoffTemplate?: "minimal" | "growth" | "sensitive" | null;
+    choiceId?: "minimal" | "growth" | "sensitive" | null;
   }, config) => {
     const normalizedInput = dropNullValues(input);
     return timeTool("openbox_resume_governed_action", async () => {
@@ -188,7 +188,7 @@ export const openbox_resume_governed_action = tool(
       audience: nullableString("Audience when applicable; otherwise null."),
       manualInput: nullableString("Final user-edited text when applicable; otherwise null."),
       sensitivity: nullableSensitivity("Sensitivity when applicable; otherwise null."),
-      handoffTemplate: nullableHandoffTemplate("Handoff template when applicable; otherwise null."),
+      choiceId: nullableHandoffChoice("Selected handoff choice when applicable; otherwise null."),
     }),
   },
 );

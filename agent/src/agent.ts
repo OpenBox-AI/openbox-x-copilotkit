@@ -105,7 +105,7 @@ export const graph = createAgent({
           and the user's natural request. When openboxInteractiveReview returns,
           you are not done. Your very next response must be a tool call to
           openbox_governed_action with the returned action, request, destination,
-          fields, audience, sensitivity, and handoffTemplate. Do not answer in
+          fields, audience, sensitivity, and choiceId. Do not answer in
           prose after openboxInteractiveReview. If the user asks for another
           external evidence handoff later, including the same wording, start a new
           openboxInteractiveReview call instead of summarizing the old handoff.

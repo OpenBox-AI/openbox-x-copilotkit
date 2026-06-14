@@ -329,7 +329,7 @@ request_text := text if {
     tool_args.request,
     tool_args.destination,
     tool_args.manualInput,
-    tool_args.handoffTemplate,
+    tool_args.choiceId,
     tool_args.fields,
   ]))
 }
@@ -364,20 +364,20 @@ result := {"decision": "HALT", "action": "halt", "reason": "OpenBox halted this 
   governed_action == "disable_production_payments"
 }
 
-handoff_template := template if {
+handoff_choice := choice if {
   governed_action == "review_data_handoff"
-  template := lower(sprintf("%v", [tool_args.handoffTemplate]))
+  choice := lower(sprintf("%v", [tool_args.choiceId]))
 }
 
 result := {"decision": "BLOCK", "action": "block", "reason": "OpenBox blocked this external handoff because it includes direct OpenBox identifiers for an external destination."} if {
   started
-  handoff_template == "sensitive"
+  handoff_choice == "sensitive"
 }
 
 result := {"decision": "ALLOW", "action": "allow", "reason": "OpenBox allowed this minimized external evidence package."} if {
   started
   governed_action == "review_data_handoff"
-  handoff_template == "minimal"
+  handoff_choice == "minimal"
 }
 
 manual_payload := text if {

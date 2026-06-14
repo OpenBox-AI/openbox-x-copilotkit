@@ -77,7 +77,7 @@ export const useGenerativeUIExamples = () => {
       sensitivity: z
         .enum(["public", "internal", "confidential", "restricted"])
         .optional(),
-      handoffTemplate: z.enum(["minimal", "growth", "sensitive"]).optional(),
+      choiceId: z.enum(["minimal", "growth", "sensitive"]).optional(),
     }),
     theme: openBoxTheme,
     scenarios: openBoxDemoScenarios as any,

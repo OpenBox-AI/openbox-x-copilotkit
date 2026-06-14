@@ -16,7 +16,7 @@
     "@langchain/langgraph": "^1.3.4",
     "@langchain/openai": "^1.4.7",
     "langchain": "^1.4.4",
-    "openbox-sdk": "github:OpenBox-AI/openbox-sdk#main"
+    "openbox-sdk": "github:OpenBox-AI/openbox-sdk#1302e38"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

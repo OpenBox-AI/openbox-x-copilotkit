@@ -31,7 +31,7 @@ export interface GovernedActionInput extends OpenBoxCopilotActionInput {
   audience?: string;
   manualInput?: string;
   sensitivity?: "public" | "internal" | "confidential" | "restricted";
-  handoffTemplate?: "minimal" | "growth" | "sensitive";
+  choiceId?: "minimal" | "growth" | "sensitive";
 }
 
 export interface ResumeGovernedActionInput extends GovernedActionInput {
@@ -67,7 +67,7 @@ export type GovernedActionResult = {
   guardrailsResult?: WorkflowVerdict["guardrailsResult"];
   redactionSummary?: string;
   artifact?: GovernedActionArtifact;
-  handoffTemplate?: GovernedActionInput["handoffTemplate"] | null;
+  choiceId?: GovernedActionInput["choiceId"] | null;
   workflowId?: string;
   runId?: string;
   activityId?: string;
@@ -294,11 +294,11 @@ function normalizeGovernedInput<T extends GovernedActionInput>(input: T): T {
   }
 
   if (canonicalInput.action === "review_data_handoff") {
-    const handoffTemplate = normalizeHandoffTemplate(canonicalInput, validFields);
-    const profile = handoffTemplateProfile(handoffTemplate);
+    const choiceId = normalizeHandoffChoice(canonicalInput, validFields);
+    const profile = handoffChoiceProfile(choiceId);
     return {
       ...canonicalInput,
-      handoffTemplate,
+      choiceId,
       destination: profile.destination,
       audience: profile.audience,
       fields: profile.fields,
@@ -334,7 +334,7 @@ function stripIrrelevantOptionalFields<T extends GovernedActionInput>(input: T):
     delete (cleaned as Partial<GovernedActionInput>).manualInput;
   }
   if (cleaned.action !== "review_data_handoff") {
-    delete (cleaned as Partial<GovernedActionInput>).handoffTemplate;
+    delete (cleaned as Partial<GovernedActionInput>).choiceId;
   }
   if (cleaned.action !== "issue_large_refund") {
     delete (cleaned as Partial<GovernedActionInput>).amountUsd;
@@ -378,18 +378,18 @@ function canonicalizeGovernedAction<T extends GovernedActionInput>(
   return input;
 }
 
-type HandoffTemplate = NonNullable<GovernedActionInput["handoffTemplate"]>;
+type HandoffChoiceId = NonNullable<GovernedActionInput["choiceId"]>;
 
-function normalizeHandoffTemplate(
+function normalizeHandoffChoice(
   input: GovernedActionInput,
   validFields: string[],
-): HandoffTemplate {
+): HandoffChoiceId {
   if (
-    input.handoffTemplate === "minimal" ||
-    input.handoffTemplate === "growth" ||
-    input.handoffTemplate === "sensitive"
+    input.choiceId === "minimal" ||
+    input.choiceId === "growth" ||
+    input.choiceId === "sensitive"
   ) {
-      return input.handoffTemplate;
+      return input.choiceId;
   }
   const requestText = [
     input.request,
@@ -423,13 +423,13 @@ function normalizeHandoffTemplate(
   return "minimal";
 }
 
-function handoffTemplateProfile(template: HandoffTemplate): {
+function handoffChoiceProfile(choiceId: HandoffChoiceId): {
   destination: string;
   audience: string;
   fields: string[];
   sensitivity: GovernedActionInput["sensitivity"];
 } {
-  if (template === "sensitive") {
+  if (choiceId === "sensitive") {
     return {
       destination: "External review workspace",
       audience: "External reviewer",
@@ -444,7 +444,7 @@ function handoffTemplateProfile(template: HandoffTemplate): {
       sensitivity: "restricted",
     };
   }
-  if (template === "growth") {
+  if (choiceId === "growth") {
     return {
       destination: "External review workspace",
       audience: "External reviewer",
@@ -536,7 +536,7 @@ async function executionArtifact(
       audience: input.audience || "External reviewer",
       records: evidence.records,
       sourceContext:
-        input.handoffTemplate === "growth"
+        input.choiceId === "growth"
           ? evidence.sourceContext
           : undefined,
       redacted: false,
@@ -614,7 +614,7 @@ async function generateBusinessArtifactWithModel<T extends GovernedActionArtifac
     fields: input.fields,
     audience: input.audience,
     sensitivity: input.sensitivity,
-    handoffTemplate: input.handoffTemplate,
+    choiceId: input.choiceId,
     runContext: {
       currentRun: "current run",
       variationSeed: randomUUID(),
