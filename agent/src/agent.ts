@@ -149,8 +149,7 @@ export const graph = createAgent({
         openbox_resume_governed_action returns
         a structured UI result, do not repeat the whole request in prose. If
         the result contains a released business artifact, the frontend renders
-        that artifact. Your final assistant message after that tool result
-        must be exactly: Done.
+        that artifact. Do not add a final prose summary after that tool result.
       - If an OpenBox tool returns status "halted" or "session_halted", stop the
         task. Tell the user the session is halted and they need to start a new
         conversation or reset the demo before trying another governed action.
