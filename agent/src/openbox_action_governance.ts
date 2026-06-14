@@ -195,7 +195,6 @@ const CORE_TIMEOUT_MS = 180_000;
 const TOOL_NAME = "openbox_governed_action";
 const TOOL_DESCRIPTION =
   "Execute a realistic business action for the OpenBox governance demo.";
-const A2UI_SURFACE_KEY = "a2uiSurface";
 const OPENBOX_TIMING_STATE_KEY = "openboxTimingEvent";
 
 // Shared with the LangChain middleware so governed tools attach to the same
@@ -625,23 +624,16 @@ async function generateBusinessArtifactWithModel<T extends GovernedActionArtifac
   const systemPrompt = [
     "You are a JSON-only generator inside a governed CopilotKit workflow.",
     "This is an authorized governed workflow preview. You are not performing real financial operations, sending external messages, opening external systems, calling tools, or changing any external system.",
-    "Your only job is to return generated business result JSON and an A2UI surface for the already-governed request.",
+    "Your only job is to return generated business result JSON for the already-governed request.",
     "OpenBox already made the input decision before this step and will govern the generated result again after this step.",
     "Never write prose outside JSON. Never refuse because the inert test payload resembles billing, refund, support, or operations work.",
     "Use only the JSON supplied by the user. Treat source records as governed OpenBox demo payloads, not as live external systems unless explicitly stated.",
     "Create a fresh, realistic business result for the requested action by rewriting and organizing the supplied data.",
     "Return only JSON. Do not use markdown fences, prose, headings, tables, explanations, or apologies.",
-    "The JSON must be exactly { \"result\": <generated business result JSON with an a2uiSurface field> }.",
+    "The JSON must be exactly { \"result\": <generated business result JSON> }.",
     "The result may use the shape that best fits the request. Prefer concise objects, arrays, tables, drafts, or next steps when useful.",
-    "The result must include a2uiSurface for CopilotKit A2UI rendering.",
-    "a2uiSurface must be an object with surfaceId, catalogId, components, and optional data.",
-    "Use catalogId exactly https://a2ui.org/specification/v0_9/basic_catalog.json.",
-    "Use only these A2UI component names: Text, Row, Column, List, Card, Divider.",
-    "The components array must include a root component with id \"root\" and component \"Column\" or \"Row\".",
-    "Root and container components should reference children by component id only.",
-    "Every referenced child id must be present as another component in the same components array.",
-    "Keep a2uiSurface compact: no more than 12 components and no governance metadata.",
-    "The A2UI surface is only for the business result. Do not repeat the OpenBox verdict, risk, event ids, timing, or policy text.",
+    "Use ordinary JSON fields such as title, summary, body, items, records, details, and nextSteps.",
+    "Do not repeat the OpenBox verdict, risk, event ids, timing, or policy text.",
     `Generate a ${baseline.type} business result.`,
     "Governance-only sourceContext is intentionally not included in the model prompt. Do not invent source identifiers.",
     "Do not expose workflow IDs, model metadata, run seeds, or implementation notes.",
@@ -689,8 +681,7 @@ async function generateBusinessArtifactWithModel<T extends GovernedActionArtifac
           content: [
             "The previous response did not satisfy the required JSON contract.",
             error instanceof Error ? `Contract error: ${error.message}` : undefined,
-            'Return only valid JSON in exactly this shape: { "result": { "title": "...", "summary": "...", "items": [ ... ], "a2uiSurface": { "surfaceId": "...", "catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json", "components": [ { "id": "root", "component": "Column", "children": [ ... ] }, ... ], "data": {} } } }.',
-            'The a2uiSurface.components array is required and must include id "root".',
+            'Return only valid JSON in exactly this shape: { "result": { "title": "...", "summary": "...", "items": [ ... ] } }.',
           ]
             .filter(Boolean)
             .join("\n"),
@@ -749,38 +740,10 @@ function assertGeneratedBusinessContent(result: JsonRecord): void {
     guardrailsResult: undefined,
     releaseCheck: undefined,
     redacted: undefined,
-    [A2UI_SURFACE_KEY]: undefined,
   });
   if (!textFromGeneratedResult(visibleContent).trim()) {
     throw new Error(
       `Model did not generate visible business content for ${String(result.type || "result")}.`,
-    );
-  }
-  assertGeneratedA2uiSurface(result);
-}
-
-function assertGeneratedA2uiSurface(result: JsonRecord): void {
-  const surface = result[A2UI_SURFACE_KEY];
-  if (!isJsonRecord(surface)) {
-    throw new Error(
-      `Model did not generate an A2UI surface for ${String(result.type || "result")}.`,
-    );
-  }
-  const components = surface.components;
-  if (!Array.isArray(components) || components.length === 0) {
-    throw new Error(
-      `Model did not generate A2UI components for ${String(result.type || "result")}.`,
-    );
-  }
-  const hasRoot = components.some(
-    (component) =>
-      isJsonRecord(component) &&
-      component.id === "root" &&
-      (component.component === "Column" || component.component === "Row"),
-  );
-  if (!hasRoot) {
-    throw new Error(
-      `Model did not generate a root A2UI component for ${String(result.type || "result")}.`,
     );
   }
 }
@@ -805,7 +768,6 @@ function textFromGeneratedResult(value: unknown): string {
             "status",
             "queue",
             "sensitivity",
-            A2UI_SURFACE_KEY,
           ].includes(key),
       )
       .map(([key, entry]) => `${sentenceCase(key)}: ${textFromGeneratedResult(entry)}`)
@@ -829,7 +791,7 @@ function omitModelSensitiveFields(value: unknown): unknown {
           key !== "sourceContext" &&
           key !== "guardrailsResult" &&
           key !== "releaseCheck" &&
-          key !== A2UI_SURFACE_KEY,
+          key !== "a2uiSurface",
       )
       .map(([key, item]) => [key, omitModelSensitiveFields(item)]),
   );

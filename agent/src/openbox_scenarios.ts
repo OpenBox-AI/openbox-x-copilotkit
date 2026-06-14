@@ -4,7 +4,6 @@ import {
   governAction,
   resumeGovernedAction,
 } from "./openbox_action_governance.js";
-import { withOpenBoxA2ui } from "./openbox_a2ui.js";
 
 const GOVERNED_ACTIONS = [
   "open_operations_queue",
@@ -64,9 +63,7 @@ export const openbox_governed_action = tool(
   }, config) => {
     const request = requireRequest(dropNullValues(input));
     return timeTool("openbox_governed_action", async () => {
-      return JSON.stringify(
-        await withOpenBoxA2ui(await governAction(request, config), config),
-      );
+      return JSON.stringify(await governAction(request, config));
     });
   },
   {
@@ -112,9 +109,7 @@ export const openbox_governed_approval_action = tool(
   }, config) => {
     const request = requireRequest(dropNullValues(input));
     return timeTool("openbox_governed_approval_action", async () => {
-      return JSON.stringify(
-        await withOpenBoxA2ui(await governAction(request, config), config),
-      );
+      return JSON.stringify(await governAction(request, config));
     });
   },
   {
@@ -162,9 +157,7 @@ export const openbox_resume_governed_action = tool(
   }, config) => {
     const normalizedInput = dropNullValues(input);
     return timeTool("openbox_resume_governed_action", async () => {
-      return JSON.stringify(
-        await withOpenBoxA2ui(await resumeGovernedAction(normalizedInput, config), config),
-      );
+      return JSON.stringify(await resumeGovernedAction(normalizedInput, config));
     });
   },
   {

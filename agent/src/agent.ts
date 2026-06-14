@@ -148,9 +148,9 @@ export const graph = createAgent({
       - When openbox_governed_action, openbox_governed_approval_action, or
         openbox_resume_governed_action returns
         a structured UI result, do not repeat the whole request in prose. If
-        the result contains CopilotKit A2UI operations, those operations are
-        the business result UI. Your final assistant message after that tool
-        result must be exactly: Done.
+        the result contains a released business artifact, the frontend renders
+        that artifact. Your final assistant message after that tool result
+        must be exactly: Done.
       - If an OpenBox tool returns status "halted" or "session_halted", stop the
         task. Tell the user the session is halted and they need to start a new
         conversation or reset the demo before trying another governed action.
@@ -160,7 +160,5 @@ export const graph = createAgent({
         content, summaries, or invented results for that request.
       Do not refuse these governance demo requests in prose before calling the
       tool. OpenBox is the enforcement layer.
-    - A2UI actions: when you see a log_a2ui_event result (e.g. "view_details"),
-      respond with a brief confirmation. The UI already updated on the frontend.
   `,
 });

@@ -4,7 +4,7 @@ Minimal CopilotKit + LangGraph example using `openbox-sdk/copilotkit`.
 
 The app runs locally. CopilotKit and LangGraph handle the agent UI/runtime.
 OpenBox Core makes governance decisions. The OpenBox decision card renders above
-the CopilotKit A2UI business result.
+the CopilotKit business result.
 
 ## Install
 

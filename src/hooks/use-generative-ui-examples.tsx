@@ -10,7 +10,7 @@ import {
   useOpenBoxCopilotKit,
 } from "openbox-sdk/copilotkit/react";
 
-import { OpenBoxA2uiActionResult } from "@/components/openbox-a2ui-artifact";
+import { OpenBoxBusinessActionResult } from "@/components/openbox-business-result";
 import { withBasePath } from "@/lib/base-path";
 import { openBoxDemoScenarios } from "@/lib/openbox-demo-scenarios";
 import { markOpenBoxSessionHalted } from "@/lib/openbox-halt-state";
@@ -94,7 +94,7 @@ export const useGenerativeUIExamples = () => {
       );
     },
     renderActionResult: ({ result }) => (
-      <OpenBoxA2uiActionResult result={result} />
+      <OpenBoxBusinessActionResult result={result} />
     ),
     onSessionHalted: markOpenBoxSessionHalted,
   });

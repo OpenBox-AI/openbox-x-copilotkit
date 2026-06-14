@@ -10,7 +10,7 @@ import {
   createOpenBoxCustomMessageRenderer,
   OpenBoxGovernanceDecision,
 } from "openbox-sdk/copilotkit/react";
-import { OpenBoxA2uiActionResult } from "@/components/openbox-a2ui-artifact";
+import { OpenBoxBusinessActionResult } from "@/components/openbox-business-result";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { withBasePath } from "@/lib/base-path";
 import { openBoxDemoScenarios } from "@/lib/openbox-demo-scenarios";
@@ -35,7 +35,7 @@ const openBoxCustomMessageRenderers = [
       />
     ),
     renderActionResult: ({ result }) => (
-      <OpenBoxA2uiActionResult result={result} />
+      <OpenBoxBusinessActionResult result={result} />
     ),
   }),
 ];
@@ -85,7 +85,6 @@ function CopilotProviderWithReset({ children }: { children: React.ReactNode }) {
           runtimeUrl={withBasePath("/api/copilotkit")}
           inspectorDefaultAnchor={{ horizontal: "right", vertical: "top" }}
           renderCustomMessages={openBoxCustomMessageRenderers}
-          a2ui={{ includeSchema: false }}
           useSingleEndpoint={false}
         >
           {children}

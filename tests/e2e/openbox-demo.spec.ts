@@ -194,7 +194,7 @@ async function expectOpenBoxDecision(page: Page, verdict: RegExp) {
 }
 
 async function expectGeneratedResult(page: Page) {
-  const result = page.locator(".openbox-a2ui-result").last();
+  const result = page.locator(".openbox-business-result").last();
   if ((await result.count()) === 0) return;
   await expect(result).toBeVisible({ timeout: OPENBOX_VISIBLE_TIMEOUT_MS });
   const text = await result.innerText({ timeout: OPENBOX_VISIBLE_TIMEOUT_MS });
@@ -214,7 +214,7 @@ async function expectGeneratedResultWhenReleased(page: Page) {
 }
 
 async function expectGeneratedResultNotToContain(page: Page, values: string[]) {
-  const result = page.locator(".openbox-a2ui-result").last();
+  const result = page.locator(".openbox-business-result").last();
   await expect(result).toBeVisible({ timeout: OPENBOX_VISIBLE_TIMEOUT_MS });
   const text = await result.innerText({ timeout: OPENBOX_VISIBLE_TIMEOUT_MS });
   for (const value of values) {
