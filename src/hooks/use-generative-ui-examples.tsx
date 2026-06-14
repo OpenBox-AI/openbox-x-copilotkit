@@ -14,6 +14,10 @@ import { OpenBoxA2uiActionResult } from "@/components/openbox-a2ui-artifact";
 import { withBasePath } from "@/lib/base-path";
 import { openBoxDemoScenarios } from "@/lib/openbox-demo-scenarios";
 import { markOpenBoxSessionHalted } from "@/lib/openbox-halt-state";
+import {
+  useOpenBoxLiveTimingValue,
+  withOpenBoxLiveTimingProps,
+} from "@/lib/openbox-live-timing";
 
 export const useGenerativeUIExamples = () => {
   const openBoxTheme = {
@@ -81,16 +85,39 @@ export const useGenerativeUIExamples = () => {
     approvalClient: createOpenBoxApprovalClient({
       endpoint: withBasePath("/api/openbox/approvals/decide"),
     }),
-    renderGovernanceDecision: (props) => (
-      <OpenBoxGovernanceDecision
-        {...(props as any)}
-        theme={openBoxTheme}
-        scenarios={openBoxDemoScenarios as any}
-      />
-    ),
+    renderGovernanceDecision: (props) => {
+      return (
+        <OpenBoxGovernanceDecisionWithLiveTiming
+          props={props}
+          theme={openBoxTheme}
+          scenarios={openBoxDemoScenarios as any}
+        />
+      );
+    },
     renderActionResult: ({ result }) => (
       <OpenBoxA2uiActionResult result={result} />
     ),
     onSessionHalted: markOpenBoxSessionHalted,
   });
 };
+
+function OpenBoxGovernanceDecisionWithLiveTiming({
+  props,
+  theme,
+  scenarios,
+}: {
+  props: Record<string, unknown>;
+  theme: Record<string, unknown>;
+  scenarios: unknown;
+}) {
+  const liveTiming = useOpenBoxLiveTimingValue();
+  const timedProps = withOpenBoxLiveTimingProps(props as any, liveTiming);
+
+  return (
+    <OpenBoxGovernanceDecision
+      {...(timedProps as any)}
+      theme={theme as any}
+      scenarios={scenarios as any}
+    />
+  );
+}

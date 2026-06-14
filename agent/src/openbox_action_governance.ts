@@ -3,8 +3,10 @@ import { type SpanData, type WorkflowVerdict } from "openbox-sdk/core-client";
 import {
   createGovernedCopilotTool,
   type OpenBoxCopilotActionInput,
+  type OpenBoxCopilotTimingEvent,
 } from "openbox-sdk/copilotkit";
 import type { RunnableConfig } from "@langchain/core/runnables";
+import { getWriter } from "@langchain/langgraph";
 import { invokeConfiguredJsonChat } from "./openai_config.js";
 import { openBoxCopilotKitAdapter } from "./openbox_governance.js";
 
@@ -195,6 +197,7 @@ const TOOL_NAME = "openbox_governed_action";
 const TOOL_DESCRIPTION =
   "Execute a realistic business action for the OpenBox governance demo.";
 const A2UI_SURFACE_KEY = "a2uiSurface";
+const OPENBOX_TIMING_STATE_KEY = "openboxTimingEvent";
 
 // Shared with the LangChain middleware so governed tools attach to the same
 // task workflow (one user task = one OpenBox session).
@@ -209,6 +212,7 @@ const governedCopilotTool = createGovernedCopilotTool<
   execute: async (input) => executionArtifact(input),
   isArtifactRedacted: artifactHasVisibleRedaction,
   markArtifactRedacted: markGovernedArtifactRedacted,
+  onTimingEvent: emitOpenBoxTimingEvent,
 });
 
 export async function governAction(
@@ -247,6 +251,47 @@ function artifactHasVisibleRedaction(artifact?: GovernedActionArtifact): boolean
   if (!artifact) return false;
   const serialized = JSON.stringify(artifact);
   return /\[REDACTED_[A-Z0-9_]+]/.test(serialized) || /<[A-Z_]+>/.test(serialized);
+}
+
+async function emitOpenBoxTimingEvent(
+  event: OpenBoxCopilotTimingEvent,
+  context: { input: GovernedActionInput; runtimeConfig?: unknown },
+) {
+  if (!context.runtimeConfig) return;
+  try {
+    const runtimeConfig = context.runtimeConfig as RunnableConfig;
+    const payload = {
+      schemaVersion: "openbox.copilotkit.timing.v1",
+      toolName: TOOL_NAME,
+      action: context.input.action,
+      request: context.input.request,
+      event,
+      emittedAt: new Date().toISOString(),
+    };
+    const writer = currentLangGraphWriter(runtimeConfig);
+    writer?.({
+      event: "on_custom_event",
+      name: "manually_emit_state",
+      data: {
+        [OPENBOX_TIMING_STATE_KEY]: payload,
+      },
+      metadata: {},
+    });
+  } catch (error) {
+    console.warn(
+      `[openbox-demo] timing event failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
+function currentLangGraphWriter(runtimeConfig: RunnableConfig) {
+  try {
+    return getWriter() ?? getWriter(runtimeConfig as any);
+  } catch {
+    return getWriter(runtimeConfig as any);
+  }
 }
 
 const BUSINESS_CONTEXT_FIELDS = [

@@ -25,11 +25,33 @@ import {
   useCopilotKit,
 } from "@copilotkit/react-core/v2";
 import type { Suggestion } from "@copilotkit/core";
+import { OpenBoxGovernanceDecision } from "openbox-sdk/copilotkit/react";
+import { openBoxDemoScenarios } from "@/lib/openbox-demo-scenarios";
+import {
+  OpenBoxLiveTimingProvider,
+  timingsFromLiveTiming,
+  useOpenBoxLiveTimingValue,
+  type OpenBoxLiveTiming,
+} from "@/lib/openbox-live-timing";
 
 type IndexedSuggestion = {
   suggestion: Suggestion;
   index: number;
 };
+
+const openBoxTheme = {
+  logoSrc: withBasePath("/openbox-mark.png"),
+  accentColor: "#3B9AF5",
+  radius: 8,
+  density: "comfortable" as const,
+  mode: "auto" as const,
+};
+
+const openBoxToolNames = new Set([
+  "openbox_governed_action",
+  "openbox_governed_approval_action",
+  "openbox_resume_governed_action",
+]);
 
 const hasSuggestionClass = (suggestion: Suggestion, className: string) =>
   suggestion.className?.split(/\s+/).includes(className) ?? false;
@@ -54,9 +76,7 @@ export default function HomePage() {
     return onOpenBoxSessionHalted(onHalted);
   }, []);
 
-  return (
-    <OpenBoxDemoContent isOpenBoxHalted={isOpenBoxHalted} />
-  );
+  return <OpenBoxDemoContent isOpenBoxHalted={isOpenBoxHalted} />;
 }
 
 function OpenBoxDemoContent({
@@ -109,6 +129,24 @@ function OpenBoxMessageView(
   { className, cursor, isRunning = false, messages = [], ...props }: CopilotChatMessageViewProps,
 ) {
   return (
+    <OpenBoxLiveTimingProvider>
+      <OpenBoxMessageViewContent
+        {...props}
+        className={className}
+        cursor={cursor}
+        isRunning={isRunning}
+        messages={messages}
+      />
+    </OpenBoxLiveTimingProvider>
+  );
+}
+
+function OpenBoxMessageViewContent(
+  { className, cursor, isRunning = false, messages = [], ...props }: CopilotChatMessageViewProps,
+) {
+  const liveTiming = useOpenBoxLiveTimingValue();
+
+  return (
     <CopilotChatMessageView
       {...props}
       cursor={cursor}
@@ -119,6 +157,8 @@ function OpenBoxMessageView(
         const lastMessage = slotMessages[slotMessages.length - 1];
         const showCursor =
           slotIsRunning && recordValue(lastMessage).role !== "reasoning";
+        const showRuntimeReview =
+          slotIsRunning && !hasOpenBoxToolState(slotMessages);
 
         return (
           <div
@@ -127,6 +167,7 @@ function OpenBoxMessageView(
             className={`copilotKitMessages cpk:flex cpk:flex-col ${className ?? ""}`}
           >
             {messageElements}
+            {showRuntimeReview ? <OpenBoxRuntimeReview liveTiming={liveTiming} /> : null}
             {interruptElement}
             {showCursor ? (
               <div className="cpk:mt-2">
@@ -142,10 +183,64 @@ function OpenBoxMessageView(
 
 OpenBoxMessageView.Cursor = CopilotChatMessageView.Cursor;
 
+function OpenBoxRuntimeReview({
+  liveTiming,
+}: {
+  liveTiming: OpenBoxLiveTiming | null;
+}) {
+  return (
+    <OpenBoxGovernanceDecision
+      status="inProgress"
+      parameters={{
+        action: liveTiming?.action ?? "copilotkit_runtime_gate",
+        request:
+          liveTiming?.request ??
+          "OpenBox is reviewing this request before the assistant continues.",
+        timings: liveTiming ? timingsFromLiveTiming(liveTiming) : undefined,
+      }}
+      theme={openBoxTheme}
+      scenarios={openBoxDemoScenarios as any}
+    />
+  );
+}
+
 function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function hasOpenBoxToolState(messages: unknown[]) {
+  return messages.some((message) => {
+    const record = recordValue(message);
+    const name = stringValue(record.name);
+    if (openBoxToolNames.has(name)) return true;
+
+    const content = stringValue(record.content);
+    if (content.includes("openbox.copilotkit.result.v1")) return true;
+
+    return toolCallsFromMessage(record).some((toolCall) =>
+      openBoxToolNames.has(toolCallName(toolCall)),
+    );
+  });
+}
+
+function toolCallsFromMessage(message: Record<string, unknown>): unknown[] {
+  if (Array.isArray(message.toolCalls)) return message.toolCalls;
+  if (Array.isArray(message.tool_calls)) return message.tool_calls;
+  const additionalKwargs = recordValue(message.additional_kwargs);
+  if (Array.isArray(additionalKwargs.tool_calls)) return additionalKwargs.tool_calls;
+  return [];
+}
+
+function toolCallName(toolCall: unknown): string {
+  const record = recordValue(toolCall);
+  const fn = recordValue(record.function);
+  return stringValue(record.name ?? fn.name);
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 const OpenBoxSuggestionView = forwardRef<

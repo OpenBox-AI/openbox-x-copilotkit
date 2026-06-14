@@ -1,5 +1,12 @@
 export const openBoxDemoScenarios = [
   {
+    action: "copilotkit_runtime_gate",
+    title: "Request Review",
+    reason: "OpenBox is reviewing the request before the assistant continues.",
+    capability: "Runtime governance, audit trail",
+    verdict: "allow",
+  },
+  {
     action: "open_operations_queue",
     title: "Operations Queue",
     reason: "OpenBox allowed this work-queue review.",

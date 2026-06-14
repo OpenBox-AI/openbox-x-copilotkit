@@ -15,6 +15,7 @@ import {
 } from "./openbox_scenarios.js";
 
 const AgentStateSchema = new StateSchema({
+  openboxTimingEvent: zodState(z.record(z.string(), z.unknown()).optional()),
   openboxSession: zodState(
     z
       .object({

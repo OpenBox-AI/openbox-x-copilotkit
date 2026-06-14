@@ -10,8 +10,27 @@ import {
 } from "openbox-sdk/copilotkit";
 
 const CORE_TIMEOUT_MS = 180_000;
+const LANGGRAPH_STREAM_MODE = [
+  "events",
+  "values",
+  "updates",
+  "messages-tuple",
+  "custom",
+] as const;
 
-const defaultAgent = new LangGraphAgent({
+class OpenBoxLangGraphAgent extends LangGraphAgent {
+  run(input: Parameters<LangGraphAgent["run"]>[0]) {
+    return super.run({
+      ...input,
+      forwardedProps: {
+        ...input.forwardedProps,
+        streamMode: LANGGRAPH_STREAM_MODE,
+      },
+    });
+  }
+}
+
+const defaultAgent = new OpenBoxLangGraphAgent({
   deploymentUrl:
     process.env.AGENT_URL ||
     process.env.LANGGRAPH_DEPLOYMENT_URL ||
