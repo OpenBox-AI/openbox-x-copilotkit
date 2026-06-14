@@ -1,4 +1,8 @@
-import { ChatOpenAI, type ChatOpenAIFields } from "@langchain/openai";
+import {
+  ChatOpenAI,
+  ChatOpenAICompletions,
+  type ChatOpenAIFields,
+} from "@langchain/openai";
 
 const openAIBaseUrl = process.env.OPENAI_BASE_URL;
 const openAIApiKey = process.env.OPENAI_API_KEY;
@@ -12,7 +16,7 @@ const strictToolCalling = process.env.OPENAI_STRICT_TOOL_CALLING === "true";
 
 export function createConfiguredChatOpenAI(
   fields: ChatOpenAIFields = {},
-): ChatOpenAI {
+) {
   const model = fields.model || process.env.OPENAI_MODEL;
   if (!model) {
     throw new Error("OPENAI_MODEL is required.");
@@ -21,7 +25,7 @@ export function createConfiguredChatOpenAI(
     throw new Error("OPENAI_BASE_URL is required.");
   }
   if (!fields.apiKey && !openAIApiKey) throw new Error("OPENAI_API_KEY is required.");
-  return new ChatOpenAI({
+  const modelFields = {
     ...fields,
     model,
     maxTokens: fields.maxTokens ?? maxTokens,
@@ -31,7 +35,11 @@ export function createConfiguredChatOpenAI(
     configuration: openAIBaseUrl
       ? { ...fields.configuration, baseURL: openAIBaseUrl }
       : fields.configuration,
-  });
+  };
+  if (openAIBaseUrl || fields.configuration?.baseURL) {
+    return new ChatOpenAICompletions(modelFields);
+  }
+  return new ChatOpenAI(modelFields);
 }
 
 export async function invokeConfiguredJsonChat(input: {
