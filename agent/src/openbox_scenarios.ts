@@ -39,19 +39,19 @@ const DirectGovernedActionSchema = z.enum(DIRECT_GOVERNED_ACTIONS);
 const ApprovalGovernedActionSchema = z.enum(APPROVAL_GOVERNED_ACTIONS);
 
 const nullableString = (description: string) =>
-  z.union([z.string(), z.null()]).describe(description);
+  z.union([z.string(), z.null()]).optional().describe(description);
 const nullableNumber = (description: string) =>
-  z.union([z.number(), z.null()]).describe(description);
+  z.union([z.number(), z.null()]).optional().describe(description);
 const nullableBoolean = (description: string) =>
-  z.union([z.boolean(), z.null()]).describe(description);
+  z.union([z.boolean(), z.null()]).optional().describe(description);
 const nullableStringArray = (description: string) =>
-  z.union([z.array(z.string()), z.null()]).describe(description);
+  z.union([z.array(z.string()), z.null()]).optional().describe(description);
 const nullableSensitivity = (description: string) =>
-  z.union([z.enum(SENSITIVITY_VALUES), z.null()]).describe(description);
+  z.union([z.enum(SENSITIVITY_VALUES), z.null()]).optional().describe(description);
 const nullableHandoffTemplate = (description: string) =>
-  z.union([z.enum(HANDOFF_TEMPLATES), z.null()]).describe(description);
+  z.union([z.enum(HANDOFF_TEMPLATES), z.null()]).optional().describe(description);
 const nullableManualTemplate = (description: string) =>
-  z.union([z.enum(MANUAL_TEMPLATES), z.null()]).describe(description);
+  z.union([z.enum(MANUAL_TEMPLATES), z.null()]).optional().describe(description);
 
 export const openbox_governed_action = tool(
   async (input: {
@@ -140,7 +140,10 @@ export const openbox_governed_approval_action = tool(
         .min(1)
         .describe("Required. Copy the user's current natural-language request."),
       destination: nullableString("Destination when applicable; otherwise null."),
-      amountUsd: nullableNumber("Dollar amount when applicable; otherwise null."),
+      amountUsd: z
+        .number()
+        .positive()
+        .describe("Required dollar amount for the approval-gated money movement."),
     }),
   },
 );
