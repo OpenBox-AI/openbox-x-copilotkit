@@ -117,8 +117,7 @@ export const graph = createAgent({
           "internal", and a useful safe draft in manualInput. When
           openboxInteractiveReview returns, you are not done. Your very next
           response must be a tool call to openbox_governed_action with the
-          returned action, request, manualInput, destination, sensitivity, and
-          template. The template is an opaque user choice, not a verdict. Do not
+          returned action, request, manualInput, destination, and sensitivity. Do not
           answer in prose after openboxInteractiveReview.
         - customer-safe service updates, release notes, or drafts that
           mention policy-safe, constrained, or redacted generation:

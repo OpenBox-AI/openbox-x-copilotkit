@@ -68,28 +68,10 @@ test.describe("OpenBox x CopilotKit local demo", () => {
     await expectNoUnsafeOutput(page);
   });
 
-  test("manual input identifier-specific choice renders redaction", async ({ page }) => {
-    await openFresh(page, "manual-redacted");
-    await clickSuggestion(page, "Draft Billing Escalation");
-    await chooseInteractiveOption(page, "Identifier-Specific Note");
-    await expectOpenBoxDecision(page, TERMINAL_VERDICT);
-    await expectGeneratedResultWhenReleased(page);
-    await expectNoUnsafeOutput(page);
-  });
-
-  test("manual input internal note choice renders allow", async ({ page }) => {
+  test("manual input draft submits final user text for governance", async ({ page }) => {
     await openFresh(page, "manual-allowed");
     await clickSuggestion(page, "Draft Billing Escalation");
-    await chooseInteractiveOption(page, "Internal Ops Note");
-    await expectOpenBoxDecision(page, TERMINAL_VERDICT);
-    await expectGeneratedResultWhenReleased(page);
-    await expectNoUnsafeOutput(page);
-  });
-
-  test("manual input external handoff choice renders block", async ({ page }) => {
-    await openFresh(page, "manual-blocked");
-    await clickSuggestion(page, "Draft Billing Escalation");
-    await chooseInteractiveOption(page, "External Handoff Note");
+    await submitManualReview(page);
     await expectOpenBoxDecision(page, TERMINAL_VERDICT);
     await expectGeneratedResultWhenReleased(page);
     await expectNoUnsafeOutput(page);
@@ -159,6 +141,11 @@ async function sendChatMessage(page: Page, message: string) {
 async function chooseInteractiveOption(page: Page, label: string) {
   await expectVisible(page, new RegExp(label, "i"));
   await page.getByRole("button", { name: new RegExp(label, "i") }).click();
+  await page.getByRole("button", { name: /Submit for Review/i }).click();
+}
+
+async function submitManualReview(page: Page) {
+  await expectVisible(page, /Billing Escalation Draft/i);
   await page.getByRole("button", { name: /Submit for Review/i }).click();
 }
 

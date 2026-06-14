@@ -32,7 +32,6 @@ export interface GovernedActionInput extends OpenBoxCopilotActionInput {
   manualInput?: string;
   sensitivity?: "public" | "internal" | "confidential" | "restricted";
   handoffTemplate?: "minimal" | "growth" | "sensitive";
-  template?: "internal" | "redacted" | "blocked";
 }
 
 export interface ResumeGovernedActionInput extends GovernedActionInput {
@@ -210,8 +209,6 @@ const governedCopilotTool = createGovernedCopilotTool<
   description: TOOL_DESCRIPTION,
   normalizeInput: normalizeGovernedInput,
   execute: async (input) => executionArtifact(input),
-  isArtifactRedacted: artifactHasVisibleRedaction,
-  markArtifactRedacted: markGovernedArtifactRedacted,
   onTimingEvent: emitOpenBoxTimingEvent,
 });
 
@@ -229,28 +226,6 @@ export async function resumeGovernedAction(
 ): Promise<GovernedActionResult> {
   const timer = startTiming(`resumeGovernedAction:${input.action}`);
   return timer.done((await governedCopilotTool.resume(input, config)) as GovernedActionResult);
-}
-
-function markGovernedArtifactRedacted(
-  artifact?: GovernedActionArtifact,
-): GovernedActionArtifact | undefined {
-  if (
-    artifact?.type === "governance_report" ||
-    artifact?.type === "data_handoff" ||
-    artifact?.type === "policy_draft"
-  ) {
-    return {
-      ...artifact,
-      redacted: true,
-    };
-  }
-  return artifact;
-}
-
-function artifactHasVisibleRedaction(artifact?: GovernedActionArtifact): boolean {
-  if (!artifact) return false;
-  const serialized = JSON.stringify(artifact);
-  return /\[REDACTED_[A-Z0-9_]+]/.test(serialized) || /<[A-Z_]+>/.test(serialized);
 }
 
 async function emitOpenBoxTimingEvent(
@@ -332,12 +307,10 @@ function normalizeGovernedInput<T extends GovernedActionInput>(input: T): T {
   }
 
   if (canonicalInput.action === "submit_manual_request") {
-    const template = normalizeManualTemplate(canonicalInput);
     return {
       ...canonicalInput,
-      template,
-      destination: manualTemplateDestination(template, canonicalInput.destination),
-      sensitivity: manualTemplateSensitivity(template, canonicalInput.sensitivity),
+      destination: canonicalInput.destination || "Operations review",
+      sensitivity: canonicalInput.sensitivity,
     } as T;
   }
 
@@ -359,7 +332,6 @@ function stripIrrelevantOptionalFields<T extends GovernedActionInput>(input: T):
 
   if (cleaned.action !== "submit_manual_request") {
     delete (cleaned as Partial<GovernedActionInput>).manualInput;
-    delete (cleaned as Partial<GovernedActionInput>).template;
   }
   if (cleaned.action !== "review_data_handoff") {
     delete (cleaned as Partial<GovernedActionInput>).handoffTemplate;
@@ -494,50 +466,6 @@ function handoffTemplateProfile(template: HandoffTemplate): {
   };
 }
 
-function normalizeManualTemplate(
-  input: GovernedActionInput,
-): GovernedActionInput["template"] {
-  if (
-    input.template === "internal" ||
-    input.template === "redacted" ||
-    input.template === "blocked"
-  ) {
-    return input.template;
-  }
-  const text = `${input.manualInput ?? ""} ${input.destination ?? ""}`.toLowerCase();
-  if (
-    input.sensitivity === "restricted" ||
-    text.includes("personal gmail") ||
-    text.includes("admin token") ||
-    text.includes("production token") ||
-    text.includes("session export") ||
-    text.includes("control export")
-  ) {
-    return "blocked";
-  }
-  if (input.sensitivity === "confidential" || hasSensitiveText(input.manualInput || "")) {
-    return "redacted";
-  }
-  return "internal";
-}
-
-function manualTemplateDestination(
-  template: GovernedActionInput["template"],
-  destination?: string,
-): string {
-  if (template === "blocked") return "Personal Gmail";
-  return destination || "Support operations";
-}
-
-function manualTemplateSensitivity(
-  template: GovernedActionInput["template"],
-  sensitivity?: GovernedActionInput["sensitivity"],
-): GovernedActionInput["sensitivity"] {
-  if (template === "blocked") return "restricted";
-  if (template === "redacted") return "confidential";
-  return sensitivity || "internal";
-}
-
 function normalizeFields(fields?: string[]): string[] {
   if (!Array.isArray(fields)) return [];
   return fields
@@ -620,12 +548,7 @@ async function executionArtifact(
       type: "manual_submission",
       status: "submitted",
       queue: input.destination || "Operations review",
-      summary:
-        input.template === "redacted"
-          ? "Please escalate the governed operations note through the approved internal path."
-          : sentenceCase(input.manualInput || input.request),
-      sourceContext:
-        input.template === "redacted" ? manualSourceContext(input) : undefined,
+      summary: sentenceCase(input.manualInput || input.request),
       sensitivity: input.sensitivity || "internal",
     });
   }
@@ -691,7 +614,6 @@ async function generateBusinessArtifactWithModel<T extends GovernedActionArtifac
     fields: input.fields,
     audience: input.audience,
     sensitivity: input.sensitivity,
-    template: input.template,
     handoffTemplate: input.handoffTemplate,
     runContext: {
       currentRun: "current run",
@@ -1241,23 +1163,6 @@ function envValue(name: string): string {
 
 function coerceString(value: unknown, defaultValue: string): string {
   return typeof value === "string" && value.trim() ? value.trim() : defaultValue;
-}
-
-function manualSourceContext(input: GovernedActionInput): string {
-  const baseContext = [
-    "Raw manual note context reviewed before release:",
-    input.manualInput || input.request,
-  ];
-  return baseContext.join("\n");
-}
-
-function hasSensitiveText(value: string): boolean {
-  return (
-    /\b[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}\b/.test(value) ||
-    /\bacct_[a-z0-9_]+\b/i.test(value) ||
-    /\$\d[\d,]*(?:\.\d{2})?\b/.test(value) ||
-    /\+1\s\d{3}\s555\s\d{4}\b/.test(value)
-  );
 }
 
 function spanProfile(input: GovernedActionInput): Pick<SpanData, "name" | "kind" | "attributes"> {

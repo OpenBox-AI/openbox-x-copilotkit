@@ -31,7 +31,6 @@ const DIRECT_GOVERNED_ACTIONS = [
 ] as const;
 const APPROVAL_GOVERNED_ACTIONS = ["issue_large_refund"] as const;
 const HANDOFF_TEMPLATES = ["minimal", "growth", "sensitive"] as const;
-const MANUAL_TEMPLATES = ["internal", "redacted", "blocked"] as const;
 const SENSITIVITY_VALUES = ["public", "internal", "confidential", "restricted"] as const;
 
 const GovernedActionSchema = z.enum(GOVERNED_ACTIONS);
@@ -50,8 +49,6 @@ const nullableSensitivity = (description: string) =>
   z.union([z.enum(SENSITIVITY_VALUES), z.null()]).optional().describe(description);
 const nullableHandoffTemplate = (description: string) =>
   z.union([z.enum(HANDOFF_TEMPLATES), z.null()]).optional().describe(description);
-const nullableManualTemplate = (description: string) =>
-  z.union([z.enum(MANUAL_TEMPLATES), z.null()]).optional().describe(description);
 
 export const openbox_governed_action = tool(
   async (input: {
@@ -64,7 +61,6 @@ export const openbox_governed_action = tool(
     manualInput?: string | null;
     sensitivity?: "public" | "internal" | "confidential" | "restricted" | null;
     handoffTemplate?: "minimal" | "growth" | "sensitive" | null;
-    template?: "internal" | "redacted" | "blocked" | null;
   }, config) => {
     const request = requireRequest(dropNullValues(input));
     return timeTool("openbox_governed_action", async () => {
@@ -103,7 +99,6 @@ export const openbox_governed_action = tool(
       manualInput: nullableString("Final user-edited text when applicable; otherwise null."),
       sensitivity: nullableSensitivity("Sensitivity when applicable; otherwise null."),
       handoffTemplate: nullableHandoffTemplate("Handoff template when applicable; otherwise null."),
-      template: nullableManualTemplate("Manual template when applicable; otherwise null."),
     }),
   },
 );

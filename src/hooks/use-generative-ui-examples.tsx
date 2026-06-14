@@ -78,7 +78,6 @@ export const useGenerativeUIExamples = () => {
         .enum(["public", "internal", "confidential", "restricted"])
         .optional(),
       handoffTemplate: z.enum(["minimal", "growth", "sensitive"]).optional(),
-      template: z.enum(["internal", "redacted", "blocked"]).optional(),
     }),
     theme: openBoxTheme,
     scenarios: openBoxDemoScenarios as any,
