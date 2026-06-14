@@ -125,6 +125,7 @@ function normalizeGeneratedComponents(value: unknown): JsonRecord[] {
 
   const components: JsonRecord[] = [];
   const usedIds = new Set<string>();
+  const declaredIds = collectDeclaredComponentIds(source);
   let generatedIdIndex = 0;
 
   const nextId = (component: JsonRecord, defaultId: string) => {
@@ -162,8 +163,10 @@ function normalizeGeneratedComponents(value: unknown): JsonRecord[] {
     const props = recordValue(component.props);
     if (kind === "Row" || kind === "Column" || kind === "List") {
       const childIds = normalizeChildRefs(
-        component.children ?? props.children,
+        component.children ?? props.children ?? component.items ?? props.items,
         id,
+        declaredIds,
+        usedIds,
         addComponent,
       );
       if (childIds.length > 0) normalized.children = childIds;
@@ -173,11 +176,26 @@ function normalizeGeneratedComponents(value: unknown): JsonRecord[] {
       if (isJsonRecord(child)) {
         normalized.child = addComponent(child, `${id}-child`);
       } else if (typeof child === "string" && child.trim()) {
-        normalized.child = child;
+        normalized.child = normalizeStringChildRef(
+          child,
+          `${id}-child`,
+          declaredIds,
+          usedIds,
+          addComponent,
+        );
       } else {
         const childIds = normalizeChildRefs(
-          component.children ?? props.children,
+          component.children ??
+            props.children ??
+            component.items ??
+            props.items ??
+            component.content ??
+            props.content ??
+            component.body ??
+            props.body,
           id,
+          declaredIds,
+          usedIds,
           addComponent,
         );
         if (childIds.length === 1) {
@@ -249,18 +267,79 @@ function normalizeGeneratedComponent(component: JsonRecord): JsonRecord | undefi
 function normalizeChildRefs(
   value: unknown,
   parentId: string,
+  declaredIds: Map<string, string>,
+  usedIds: Set<string>,
   addComponent: (component: JsonRecord, defaultId: string) => string | undefined,
 ): string[] {
+  if (typeof value === "string" && value.trim()) {
+    const id = normalizeStringChildRef(
+      value,
+      `${parentId}-text`,
+      declaredIds,
+      usedIds,
+      addComponent,
+    );
+    return id ? [id] : [];
+  }
+  if (isJsonRecord(value)) {
+    const id = addComponent(value, `${parentId}-child`);
+    return id ? [id] : [];
+  }
   if (!Array.isArray(value)) return [];
   return value
     .map((item, index) => {
-      if (typeof item === "string" && item.trim()) return item;
+      if (typeof item === "string" && item.trim()) {
+        return normalizeStringChildRef(
+          item,
+          `${parentId}-text-${index + 1}`,
+          declaredIds,
+          usedIds,
+          addComponent,
+        );
+      }
       if (isJsonRecord(item)) {
         return addComponent(item, `${parentId}-child-${index + 1}`);
       }
       return undefined;
     })
     .filter((id): id is string => Boolean(id));
+}
+
+function normalizeStringChildRef(
+  value: string,
+  defaultId: string,
+  declaredIds: Map<string, string>,
+  usedIds: Set<string>,
+  addComponent: (component: JsonRecord, defaultId: string) => string | undefined,
+): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const knownId = declaredIds.get(trimmed);
+  if (knownId || usedIds.has(trimmed)) return knownId ?? trimmed;
+  return addComponent({ component: "Text", text: trimmed }, defaultId);
+}
+
+function collectDeclaredComponentIds(value: unknown): Map<string, string> {
+  const ids = new Map<string, string>();
+  const visit = (item: unknown) => {
+    if (Array.isArray(item)) {
+      for (const child of item) visit(child);
+      return;
+    }
+    if (!isJsonRecord(item)) return;
+    const raw =
+      stringValue(item.id) ||
+      stringValue(item.componentId) ||
+      stringValue(recordValue(item.props).id);
+    if (raw && !ids.has(raw)) ids.set(raw, slugId(raw) || raw);
+    const props = recordValue(item.props);
+    visit(item.child);
+    visit(item.children);
+    visit(props.child);
+    visit(props.children);
+  };
+  visit(value);
+  return ids;
 }
 
 function ensureRootComponent(components: JsonRecord[]): JsonRecord[] {

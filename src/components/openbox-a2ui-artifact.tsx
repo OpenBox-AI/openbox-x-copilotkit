@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   A2UIProvider,
   A2UIRenderer,
@@ -16,7 +16,9 @@ export function OpenBoxA2uiActionResult({
   result: unknown;
 }) {
   const toolResult = parseResult(result);
-  const operations = toOperations(toolResult[OPENBOX_A2UI_OPERATIONS_KEY]);
+  const rawOperations = toOperations(toolResult[OPENBOX_A2UI_OPERATIONS_KEY]);
+  const signature = JSON.stringify(rawOperations);
+  const operations = useMemo(() => rawOperations, [signature]);
   if (toolResult.status !== "executed" && toolResult.status !== "constrained") {
     return null;
   }
@@ -37,10 +39,13 @@ function OpenBoxA2uiSurface({
 }) {
   const { processMessages } = useA2UIActions();
   const error = useA2UIError();
+  const processedSignatureRef = useRef<string | null>(null);
   const surfaceIds = useMemo(() => surfaceIdsFromOperations(operations), [operations]);
   const signature = useMemo(() => JSON.stringify(operations), [operations]);
 
   useEffect(() => {
+    if (processedSignatureRef.current === signature) return;
+    processedSignatureRef.current = signature;
     processMessages(operations);
   }, [processMessages, signature, operations]);
 
