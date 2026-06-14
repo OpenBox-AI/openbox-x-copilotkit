@@ -5,8 +5,8 @@ import {
   type OpenBoxCopilotActionInput,
   type OpenBoxCopilotTimingEvent,
 } from "openbox-sdk/copilotkit";
+import { copilotkitEmitState } from "@copilotkit/sdk-js/langgraph";
 import type { RunnableConfig } from "@langchain/core/runnables";
-import { getWriter } from "@langchain/langgraph";
 import { invokeConfiguredJsonChat } from "./openai_config.js";
 import { openBoxCopilotKitAdapter } from "./openbox_governance.js";
 
@@ -268,14 +268,8 @@ async function emitOpenBoxTimingEvent(
       event,
       emittedAt: new Date().toISOString(),
     };
-    const writer = currentLangGraphWriter(runtimeConfig);
-    writer?.({
-      event: "on_custom_event",
-      name: "manually_emit_state",
-      data: {
-        [OPENBOX_TIMING_STATE_KEY]: payload,
-      },
-      metadata: {},
+    await copilotkitEmitState(runtimeConfig, {
+      [OPENBOX_TIMING_STATE_KEY]: payload,
     });
   } catch (error) {
     console.warn(
@@ -283,14 +277,6 @@ async function emitOpenBoxTimingEvent(
         error instanceof Error ? error.message : String(error)
       }`,
     );
-  }
-}
-
-function currentLangGraphWriter(runtimeConfig: RunnableConfig) {
-  try {
-    return getWriter() ?? getWriter(runtimeConfig as any);
-  } catch {
-    return getWriter(runtimeConfig as any);
   }
 }
 

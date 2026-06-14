@@ -105,7 +105,6 @@ export const openbox_governed_action = tool(
       handoffTemplate: nullableHandoffTemplate("Handoff template when applicable; otherwise null."),
       template: nullableManualTemplate("Manual template when applicable; otherwise null."),
     }),
-    returnDirect: true,
   },
 );
 
@@ -196,7 +195,6 @@ export const openbox_resume_governed_action = tool(
       sensitivity: nullableSensitivity("Sensitivity when applicable; otherwise null."),
       handoffTemplate: nullableHandoffTemplate("Handoff template when applicable; otherwise null."),
     }),
-    returnDirect: true,
   },
 );
 

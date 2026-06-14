@@ -25,12 +25,19 @@ test.describe("OpenBox x CopilotKit local demo", () => {
     await expect(page.getByRole("button", { name: /Behavior HTTP POST/i })).toHaveCount(0);
   });
 
-  test("story prompts render allow, redaction, final-output governance, and goal drift block", async ({
-    page,
-  }) => {
+  test("work queue prompt renders allow", async ({ page }) => {
     await runSuggestion(page, "Review Work Queue", /Allowed/i);
+  });
+
+  test("exception report prompt renders redaction", async ({ page }) => {
     await runSuggestion(page, "Prepare Exception Report", /Allowed|Redacted|Constrained/i);
+  });
+
+  test("customer update prompt renders final-output governance", async ({ page }) => {
     await runSuggestion(page, "Draft Customer Update", /Allowed|Redacted|Constrained/i);
+  });
+
+  test("exception id export prompt renders goal drift block", async ({ page }) => {
     await runSuggestion(page, "Send Exception IDs", TERMINAL_VERDICT);
   });
 
@@ -108,7 +115,10 @@ test.describe("OpenBox x CopilotKit local demo", () => {
     await openFresh(page, "halt");
     await clickSuggestion(page, "Update Vendor Bank");
     await expectOpenBoxDecision(page, TERMINAL_VERDICT);
-    await clickSuggestion(page, "Review Work Queue");
+    await sendChatMessage(
+      page,
+      "Review this operations queue and tell me what can move forward.",
+    );
     await expectOpenBoxDecision(page, TERMINAL_VERDICT);
     await expectNoUnsafeOutput(page);
   });
@@ -138,6 +148,12 @@ async function openFresh(page: Page, reset: string) {
 async function clickSuggestion(page: Page, title: string) {
   const button = page.getByRole("button", { name: new RegExp(title, "i") });
   await button.click();
+}
+
+async function sendChatMessage(page: Page, message: string) {
+  const input = page.getByRole("textbox").last();
+  await input.fill(message);
+  await input.press("Enter");
 }
 
 async function chooseInteractiveOption(page: Page, label: string) {
@@ -202,6 +218,7 @@ async function expectNoUnsafeOutput(page: Page) {
   const text = await page.locator("body").innerText();
   expect(text).not.toContain("schemaVersion");
   expect(text).not.toContain("openbox.copilotkit.result.v1");
+  expect(text).not.toContain("Cannot send event type");
   expect(text).not.toContain("agent_id:");
   expect(text).not.toContain("session_id:");
   expect(text).not.toContain("workflow_id:");
