@@ -2,10 +2,10 @@
 
 | Workflow | Triggers | Purpose |
 |---|---|---|
-| `publish.yml` | semver tag push, `workflow_dispatch` | Release governance, quality, security, optional SonarQube, npm packing, and OIDC npm publish |
-| `pr-governance.yml` | push to `main`, PR to `main`, `workflow_dispatch` | Branch, PR title, optional commit convention, and sensitive path ownership checks |
-| `pr-quality.yml` | push to `main`, PR to `main`, `workflow_dispatch` | Install root and agent dependencies, lint, typecheck, build, and upload build artifacts |
-| `pr-security.yml` | push to `main`, PR to `main`, `workflow_dispatch` | Trivy filesystem scan and Gitleaks secret scan with SARIF artifacts |
+| `publish.yml` | semver tag push, push to `feat/workflow`, `workflow_dispatch` | Release governance, quality, security, optional SonarQube, npm packing, and OIDC npm publish on tag/dispatch |
+| `pr-governance.yml` | push to `main`/`feat/workflow`, PR to `main`/`feat/workflow`, `workflow_dispatch` | Branch, PR title, optional commit convention, and sensitive path ownership checks |
+| `pr-quality.yml` | push to `main`/`feat/workflow`, PR to `main`/`feat/workflow`, `workflow_dispatch` | Install root and agent dependencies, lint, typecheck, build, and upload build artifacts |
+| `pr-security.yml` | push to `main`/`feat/workflow`, PR to `main`/`feat/workflow`, `workflow_dispatch` | Trivy filesystem scan and Gitleaks secret scan with SARIF artifacts |
 | `test.yml` | `workflow_dispatch` | Manual verification entry point for the same quality checks plus optional OpenBox live checks |
 
 ## Required Repo Secrets

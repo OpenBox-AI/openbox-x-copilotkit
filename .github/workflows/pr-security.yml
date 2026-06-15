@@ -2,14 +2,14 @@ name: PR Security
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/workflow]
     types:
       - opened
       - reopened
       - synchronize
       - ready_for_review
   push:
-    branches: [main]
+    branches: [main, feat/workflow]
   workflow_dispatch:
 
 permissions:
