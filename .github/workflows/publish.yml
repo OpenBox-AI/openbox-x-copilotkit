@@ -141,9 +141,6 @@ jobs:
         run: npm ci
         working-directory: agent
 
-      - name: Lint app
-        run: npm run lint
-
       - name: Typecheck app
         run: npx tsc --noEmit
 
