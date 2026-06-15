@@ -2,14 +2,14 @@ name: PR Quality
 
 on:
   pull_request:
-    branches: [main, feat/workflow]
+    branches: [main]
     types:
       - opened
       - reopened
       - synchronize
       - ready_for_review
   push:
-    branches: [main, feat/workflow]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -22,10 +22,12 @@ concurrency:
 
 env:
   NODE_VERSION: "22"
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
 jobs:
-  quality:
-    name: Lint, Typecheck, Build
+  test:
+    name: Test
     runs-on: ubuntu-latest
 
     steps:
@@ -55,6 +57,30 @@ jobs:
         run: npx tsc --noEmit
         working-directory: agent
 
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs:
+      - test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install agent dependencies
+        run: npm ci
+        working-directory: agent
+
       - name: Build app
         run: npm run build
 
@@ -65,3 +91,52 @@ jobs:
           name: next-build
           path: .next/
           if-no-files-found: error
+
+  sonarqube:
+    name: SonarQube
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs:
+      - test
+
+    steps:
+      - name: Skip when SonarQube secrets are not configured
+        if: ${{ env.SONAR_TOKEN == '' || env.SONAR_HOST_URL == '' }}
+        run: echo "Skipping SonarQube because SONAR_TOKEN or SONAR_HOST_URL is not configured."
+
+      - name: Checkout repository
+        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache SonarQube packages
+        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: SonarQube scan
+        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' }}
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=openbox-x-copilotkit
+            -Dsonar.projectName=openbox-x-copilotkit
+            -Dsonar.sources=src,agent/src,scripts
+            -Dsonar.tests=tests
+            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.exclusions=.next/**,coverage/**,artifacts/**,playwright-report/**,test-results/**,node_modules/**,agent/node_modules/**
