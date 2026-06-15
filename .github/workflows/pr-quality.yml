@@ -1,0 +1,67 @@
+name: PR Quality
+
+on:
+  pull_request:
+    branches: [main]
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  quality:
+    name: Lint, Typecheck, Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install agent dependencies
+        run: npm ci
+        working-directory: agent
+
+      - name: Lint app
+        run: npm run lint
+
+      - name: Typecheck app
+        run: npx tsc --noEmit
+
+      - name: Typecheck agent
+        run: npx tsc --noEmit
+        working-directory: agent
+
+      - name: Build app
+        run: npm run build
+
+      - name: Upload Next build artifact
+        if: ${{ always() && hashFiles('.next/**') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build
+          path: .next/
+          if-no-files-found: error
