@@ -156,6 +156,7 @@ jobs:
         with:
           name: release-next-build
           path: .next/
+          include-hidden-files: true
           if-no-files-found: error
 
       - name: Pack npm tarball
