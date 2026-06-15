@@ -82,7 +82,7 @@ jobs:
 
       - name: Upload Trivy SARIF artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trivy-fs-results
           path: trivy-fs-results.sarif
@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload Gitleaks SARIF artifact
         if: always() && hashFiles('results.sarif') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gitleaks-results
           path: results.sarif
