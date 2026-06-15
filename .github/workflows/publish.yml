@@ -380,7 +380,7 @@ jobs:
             -Dsonar.sourceEncoding=UTF-8
             -Dsonar.exclusions=.next/**,coverage/**,artifacts/**,playwright-report/**,test-results/**,node_modules/**,agent/node_modules/**
 
-
+  publish:
     name: Build and Publish
     runs-on: ubuntu-latest
     environment: npm
