@@ -1,6 +1,6 @@
 # OpenBox x CopilotKit
 
-Minimal CopilotKit + LangGraph example using `openbox-sdk/copilotkit`.
+Minimal CopilotKit + LangGraph example using `@openbox-ai/openbox-sdk/copilotkit`.
 
 The app runs locally. CopilotKit and LangGraph handle the agent UI/runtime.
 OpenBox Core makes governance decisions. The OpenBox decision card renders above
@@ -13,8 +13,7 @@ cp .env.example .env
 npm install
 ```
 
-This example installs `openbox-sdk` from GitHub because the package is not on
-npm yet.
+The example uses the published `@openbox-ai/openbox-sdk` package from npm.
 
 ## Configure
 
@@ -64,13 +63,6 @@ AGENT_URL=http://localhost:8123 npm run dev:ui -- -p 3001
 ```
 
 Open `http://localhost:3001`.
-
-If you run the Docker profile and the SDK repository is private, pass a GitHub
-token as a build secret:
-
-```bash
-GITHUB_TOKEN="$(gh auth token)" docker compose --profile copilotkit build openbox-copilotkit-agent
-```
 
 ## Try
 

@@ -1,10 +1,10 @@
 import { AIMessage } from "@langchain/core/messages";
 import { createMiddleware, type AgentMiddleware } from "langchain";
-import { OpenBoxCoreClient } from "openbox-sdk";
+import { OpenBoxCoreClient } from "@openbox-ai/openbox-sdk";
 import {
   createOpenBoxCopilotKitAdapter,
   OpenBoxCopilotKitError,
-} from "openbox-sdk/copilotkit";
+} from "@openbox-ai/openbox-sdk/copilotkit";
 
 const WORKFLOW_TYPE = "CopilotKitLangGraphAgent";
 const TASK_QUEUE = "copilotkit-langgraph";

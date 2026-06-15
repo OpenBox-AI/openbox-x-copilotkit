@@ -3,7 +3,6 @@
 !openbox-x-copilotkit/
 !openbox-x-copilotkit/agent/
 !openbox-x-copilotkit/agent/package.json
-!openbox-x-copilotkit/agent/package-lock.json
 !openbox-x-copilotkit/agent/langgraph.json
 !openbox-x-copilotkit/agent/tsconfig.json
 !openbox-x-copilotkit/agent/src/

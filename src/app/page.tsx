@@ -25,7 +25,7 @@ import {
   useCopilotKit,
 } from "@copilotkit/react-core/v2";
 import type { Suggestion } from "@copilotkit/core";
-import { OpenBoxGovernanceDecision } from "openbox-sdk/copilotkit/react";
+import { OpenBoxGovernanceDecision } from "@openbox-ai/openbox-sdk/copilotkit/react";
 import { openBoxDemoScenarios } from "@/lib/openbox-demo-scenarios";
 import {
   OpenBoxLiveTimingProvider,

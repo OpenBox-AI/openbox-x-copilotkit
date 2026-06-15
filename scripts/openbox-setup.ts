@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { OpenBoxClient } from "openbox-sdk";
+import { OpenBoxClient } from "@openbox-ai/openbox-sdk";
 import {
   DEMO_POLICY_MARKER,
   demoBehaviorRules,

@@ -1,24 +1,13 @@
 import { NextResponse } from "next/server";
-import { createOpenBoxApprovalRoute } from "openbox-sdk/copilotkit";
+import { createOpenBoxApprovalRoute } from "@openbox-ai/openbox-sdk/copilotkit";
 import { z } from "zod";
 
 export const runtime = "nodejs";
 
 const DecisionSchema = z.object({
-  governanceEventId: z.string().min(1).optional(),
-  workflowId: z.string().min(1).optional(),
-  runId: z.string().min(1).optional(),
-  activityId: z.string().min(1).optional(),
+  governanceEventId: z.string().min(1),
   decision: z.enum(["approve", "reject"]),
-}).refine(
-  (value) =>
-    Boolean(value.governanceEventId) ||
-    Boolean(value.workflowId && value.runId && value.activityId),
-  {
-    message:
-      "OpenBox approval decision requires governanceEventId or workflowId, runId, and activityId.",
-  },
-);
+});
 const approvalRoute = createOpenBoxApprovalRoute({
   clientName: "openbox-copilotkit-demo",
   backendTimeoutMs: 180_000,

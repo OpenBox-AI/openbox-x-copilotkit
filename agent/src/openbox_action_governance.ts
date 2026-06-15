@@ -1,11 +1,10 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { type SpanData, type WorkflowVerdict } from "openbox-sdk/core-client";
+import { type SpanData, type WorkflowVerdict } from "@openbox-ai/openbox-sdk/core-client";
 import {
   createGovernedCopilotTool,
   type OpenBoxCopilotActionInput,
   type OpenBoxCopilotTimingEvent,
-} from "openbox-sdk/copilotkit";
-import { copilotkitEmitState } from "@copilotkit/sdk-js/langgraph";
+} from "@openbox-ai/openbox-sdk/copilotkit";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { invokeConfiguredJsonChat } from "./openai_config.js";
 import { openBoxCopilotKitAdapter } from "./openbox_governance.js";
@@ -232,8 +231,9 @@ async function emitOpenBoxTimingEvent(
   event: OpenBoxCopilotTimingEvent,
   context: { input: GovernedActionInput; runtimeConfig?: unknown },
 ) {
-  if (!context.runtimeConfig) return;
+  if (!canEmitCopilotKitState(context.runtimeConfig)) return;
   try {
+    const { copilotkitEmitState } = await import("@copilotkit/sdk-js/langgraph");
     const runtimeConfig = context.runtimeConfig as RunnableConfig;
     const payload = {
       schemaVersion: "openbox.copilotkit.timing.v1",
@@ -253,6 +253,15 @@ async function emitOpenBoxTimingEvent(
       }`,
     );
   }
+}
+
+function canEmitCopilotKitState(config: unknown): config is RunnableConfig {
+  return Boolean(
+    config &&
+      typeof config === "object" &&
+      "callbacks" in config &&
+      (config as { callbacks?: unknown }).callbacks,
+  );
 }
 
 const BUSINESS_CONTEXT_FIELDS = [

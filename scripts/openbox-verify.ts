@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { OpenBoxClient } from "openbox-sdk";
-import { CoreApiError, OpenBoxCoreClient } from "openbox-sdk/core-client";
+import { OpenBoxClient } from "@openbox-ai/openbox-sdk";
+import { OpenBoxCoreClient } from "@openbox-ai/openbox-sdk/core-client";
 import {
   governAction,
   resumeGovernedAction,
@@ -1003,6 +1003,17 @@ async function fetchBackend(path: string): Promise<any> {
   return body;
 }
 
+async function fetchRecentSessions(perPage = 100): Promise<Array<Record<string, any>>> {
+  return rowsFromResponse(
+    await fetchBackend(`/agent/${config.agentId}/sessions?page=0&perPage=${perPage}`),
+  );
+}
+
+async function findRecentSessionByWorkflow(workflowId: string): Promise<Record<string, any> | undefined> {
+  const rows = await fetchRecentSessions();
+  return rows.find((row) => row.workflow_id === workflowId);
+}
+
 async function verifyAgentVisibility() {
   const response = await fetch(`${config.apiUrl}/agent/${config.agentId}`, {
     headers: { "X-API-Key": config.backendApiKey },
@@ -1286,8 +1297,7 @@ async function verifyApprovalTelemetry() {
 }
 
 async function verifySessionTelemetry() {
-  const sessions = await fetchBackend(`/agent/${config.agentId}/sessions?perPage=100`);
-  const rows = rowsFromResponse(sessions);
+  const rows = await fetchRecentSessions();
   if (matrixWorkflows.length === 0) {
     throw new Error("No matrix workflows were recorded for session telemetry verification.");
   }
@@ -1385,7 +1395,7 @@ async function verifyTrustAndIssueTelemetry() {
 async function verifyGoalDriftTelemetry() {
   const trend = rowsFromResponse(await fetchBackend(`/agent/${config.agentId}/goal-alignment/trend`));
   const drifts = rowsFromResponse(await fetchBackend(`/agent/${config.agentId}/goal-alignment/recent-drifts`));
-  const sessions = rowsFromResponse(await fetchBackend(`/agent/${config.agentId}/sessions?perPage=100`));
+  const sessions = await fetchRecentSessions();
   const sessionWithGoalStats = sessions.find((row) => row.id || row.session_id);
   let sessionStats: unknown = null;
   if (sessionWithGoalStats?.id) {
@@ -1405,8 +1415,7 @@ async function verifyGoalDriftTelemetry() {
 async function assertWorkflowTerminalEvent(workflowId: string, terminalEvent: string) {
   let actual: string | undefined;
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const rows = rowsFromResponse(await backend.listSessions(config.agentId, { perPage: 100 }));
-    const session = rows.find((row) => row.workflow_id === workflowId);
+    const session = await findRecentSessionByWorkflow(workflowId);
     actual = session?.current_step?.event_type ?? session?.last_event;
     if (actual === terminalEvent) break;
     await new Promise((resolve) => setTimeout(resolve, 750));
@@ -1419,8 +1428,7 @@ async function assertWorkflowTerminalEvent(workflowId: string, terminalEvent: st
 
 async function assertWorkflowHaltedSession(workflowId: string) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const rows = rowsFromResponse(await backend.listSessions(config.agentId, { perPage: 100 }));
-    const session = rows.find((row) => row.workflow_id === workflowId);
+    const session = await findRecentSessionByWorkflow(workflowId);
     const status = String(session?.status ?? "");
     const currentEvent = session?.current_step?.event_type ?? session?.last_event;
     if (status === "halted" && session?.id) {
@@ -1434,8 +1442,7 @@ async function assertWorkflowHaltedSession(workflowId: string) {
 
 async function assertWorkflowPendingApprovalSession(workflowId: string) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const rows = rowsFromResponse(await backend.listSessions(config.agentId, { perPage: 100 }));
-    const session = rows.find((row) => row.workflow_id === workflowId);
+    const session = await findRecentSessionByWorkflow(workflowId);
     const status = String(session?.status ?? "");
     const currentEvent = session?.current_step?.event_type ?? session?.last_event;
     if (status === "pending" && currentEvent === "ActivityStarted" && session?.id) {
@@ -1642,7 +1649,7 @@ function redactSecret(value: unknown): string {
 }
 
 function safeError(error: unknown): string {
-  if (error instanceof CoreApiError) {
+  if (error instanceof Error && "body" in error) {
     return `${error.message}: ${JSON.stringify(error.body)}`;
   }
   return error instanceof Error ? error.message : String(error);

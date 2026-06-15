@@ -7,7 +7,7 @@ import { LangGraphAgent } from "@copilotkit/runtime/langgraph";
 import {
   createOpenBoxCopilotKitAdapter,
   createOpenBoxCopilotRuntime,
-} from "openbox-sdk/copilotkit";
+} from "@openbox-ai/openbox-sdk/copilotkit";
 
 const CORE_TIMEOUT_MS = 180_000;
 const LANGGRAPH_STREAM_MODE = [

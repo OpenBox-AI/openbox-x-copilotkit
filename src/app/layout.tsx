@@ -9,7 +9,7 @@ import { CopilotKit } from "@copilotkit/react-core/v2";
 import {
   createOpenBoxCustomMessageRenderer,
   OpenBoxGovernanceDecision,
-} from "openbox-sdk/copilotkit/react";
+} from "@openbox-ai/openbox-sdk/copilotkit/react";
 import { OpenBoxBusinessActionResult } from "@/components/openbox-business-result";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { withBasePath } from "@/lib/base-path";

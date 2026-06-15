@@ -8,7 +8,7 @@ import {
   createOpenBoxApprovalClient,
   OpenBoxGovernanceDecision,
   useOpenBoxCopilotKit,
-} from "openbox-sdk/copilotkit/react";
+} from "@openbox-ai/openbox-sdk/copilotkit/react";
 
 import { OpenBoxBusinessActionResult } from "@/components/openbox-business-result";
 import { withBasePath } from "@/lib/base-path";
