@@ -1,0 +1,46 @@
+version: 2
+updates:
+  # npm dependencies: root Next app.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      copilotkit:
+        patterns:
+          - "@copilotkit/*"
+      playwright:
+        patterns:
+          - "@playwright/*"
+
+  # npm dependencies: LangGraph agent.
+  - package-ecosystem: npm
+    directory: /agent
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    groups:
+      langchain:
+        patterns:
+          - "@langchain/*"
+          - "langchain"
+      copilotkit:
+        patterns:
+          - "@copilotkit/*"
+
+  # GitHub Actions versions.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
