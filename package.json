@@ -2,6 +2,12 @@
   "name": "openbox-x-copilotkit",
   "version": "0.1.0",
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OpenBox-AI/openbox-x-copilotkit.git"
+  },
+  "license": "MIT",
+  "author": "OpenBox AI",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:ui\" \"npm run dev:agent\" --names ui,agent --prefix-colors blue,green --kill-others",
