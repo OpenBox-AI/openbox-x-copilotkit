@@ -836,9 +836,7 @@ function recordMatrixWorkflow(
   expectedBackendStatus?: string,
 ) {
   if (!result.workflowId) return;
-  // Verdict/redaction consistency: a transformed payload must never present
-  // itself as a plain allow. "Allowed with redaction" renders and reports as
-  // constrained, otherwise the OpenBox card contradicts its own data.
+  // Redacted payloads must report as constrained, not plain allow.
   if (
     typeof result.redactionSummary === "string" &&
     result.redactionSummary.length > 0 &&

@@ -1,8 +1,3 @@
-/**
- * Suggestion pills shown in the chat UI. These should read as normal business
- * requests; OpenBox governance is demonstrated by the runtime result, not by
- * making the prompt text sound like a test case.
- */
 import { useConfigureSuggestions } from "@copilotkit/react-core/v2";
 const openboxWorkflowSuggestions = [
   {

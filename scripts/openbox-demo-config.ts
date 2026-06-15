@@ -128,8 +128,7 @@ export const demoGuardrails: DemoGuardrail[] = [
     description: "Redact PII from CopilotKit governed tool input before business execution.",
     guardrail_type: "1",
     processing_stage: "0",
-    // Business-PII only. DATE_TIME is excluded because it false-positives on
-    // ordinary request text ("today", "July").
+    // Exclude DATE_TIME so ordinary scheduling text is not redacted.
     params: {
       entities: [
         "EMAIL_ADDRESS",
