@@ -208,6 +208,7 @@ const governedCopilotTool = createGovernedCopilotTool<
   description: TOOL_DESCRIPTION,
   normalizeInput: normalizeGovernedInput,
   execute: async (input) => executionArtifact(input),
+  spanProfile,
   onTimingEvent: emitOpenBoxTimingEvent,
 });
 
