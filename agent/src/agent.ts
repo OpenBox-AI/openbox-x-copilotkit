@@ -138,6 +138,8 @@ export const graph = createAgent({
         openboxApprovalReview using the workflowId, runId, activityId,
         approvalId, governanceEventId, expiresAt, action, request,
         destination, amountUsd, and reason from the tool result.
+        approval_required is not a terminal result. Never stop after
+        openbox_governed_approval_action returns approval_required.
       - After openboxApprovalReview returns, parse its JSON string and always
         call openbox_resume_governed_action with the same IDs and action
         payload plus the parsed approved value. This resume tool is the only
@@ -150,6 +152,8 @@ export const graph = createAgent({
         a structured UI result, do not repeat the whole request in prose. If
         the result contains a released business artifact, the frontend renders
         that artifact. Do not add a final prose summary after that tool result.
+        This rule does not apply to approval_required, which must continue by
+        calling openboxApprovalReview.
       - If an OpenBox tool returns status "halted" or "session_halted", stop the
         task. Tell the user the session is halted and they need to start a new
         conversation or reset the demo before trying another governed action.

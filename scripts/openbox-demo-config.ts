@@ -1,6 +1,7 @@
 export const DEMO_PREFIX = "copilotkit-demo/";
 export const DEMO_POLICY_MARKER = "copilotkit-demo/openbox-governance-matrix-v4";
 export const DEMO_BEHAVIOR_RULE_NAME = `${DEMO_PREFIX}llm-tool-call-governance-observed`;
+const GOVERNED_TOOL_ACTIVITY_TYPE = "openbox_governed_action";
 
 const toolEndFields = [
   "output.artifact.title",
@@ -15,7 +16,10 @@ const toolEndFields = [
   "output.artifact.items.*.title",
   "output.artifact.items.*.summary",
   "output.artifact.items.*.body",
+  "output.artifact.items.*.issue",
+  "output.artifact.items.*.impact",
   "output.artifact.items.*.nextStep",
+  "output.artifact.items.*.next_step",
   "output.artifact.records.*.item",
   "output.artifact.records.*.issue",
   "output.artifact.records.*.impact",
@@ -49,7 +53,10 @@ const toolEndStringFields = [
   "output.artifact.items.*.title",
   "output.artifact.items.*.summary",
   "output.artifact.items.*.body",
+  "output.artifact.items.*.issue",
+  "output.artifact.items.*.impact",
   "output.artifact.items.*.nextStep",
+  "output.artifact.items.*.next_step",
   "output.artifact.records.*.item",
   "output.artifact.records.*.issue",
   "output.artifact.records.*.impact",
@@ -72,17 +79,13 @@ const toolEndStringFields = [
   "output.body",
 ];
 
-function toolGuardrailSettings(
-  activityType: "on_tool_start" | "on_tool_end",
-  fields: string[],
-  onFail: 0 | 1,
-) {
+function toolGuardrailSettings(fields: string[], onFail: 0 | 1) {
   return {
     on_fail: onFail,
     log_violation: true,
     activities: [
       {
-        activity_type: activityType,
+        activity_type: GOVERNED_TOOL_ACTIVITY_TYPE,
         fields_to_check: fields,
       },
     ],
@@ -139,7 +142,7 @@ export const demoGuardrails: DemoGuardrail[] = [
       ],
       replace_values: [],
     },
-    settings: toolGuardrailSettings("on_tool_start", toolRequestFields, 0),
+    settings: toolGuardrailSettings(toolRequestFields, 0),
     trust_impact: "low",
   },
   {
@@ -163,7 +166,7 @@ export const demoGuardrails: DemoGuardrail[] = [
       ],
       max_l_dist: 1,
     },
-    settings: toolGuardrailSettings("on_tool_start", toolRequestFields, 0),
+    settings: toolGuardrailSettings(toolRequestFields, 0),
     trust_impact: "low",
   },
   {
@@ -181,7 +184,7 @@ export const demoGuardrails: DemoGuardrail[] = [
       ],
       replace_values: [],
     },
-    settings: toolGuardrailSettings("on_tool_end", toolEndFields, 0),
+    settings: toolGuardrailSettings(toolEndFields, 0),
     trust_impact: "low",
   },
   {
@@ -200,7 +203,7 @@ export const demoGuardrails: DemoGuardrail[] = [
       ],
       max_l_dist: 1,
     },
-    settings: toolGuardrailSettings("on_tool_start", toolRequestFields, 1),
+    settings: toolGuardrailSettings(toolRequestFields, 1),
     trust_impact: "medium",
   },
   {
@@ -229,7 +232,7 @@ export const demoGuardrails: DemoGuardrail[] = [
       ],
       max_l_dist: 1,
     },
-    settings: toolGuardrailSettings("on_tool_end", toolEndStringFields, 0),
+    settings: toolGuardrailSettings(toolEndStringFields, 0),
     trust_impact: "low",
   },
   {
@@ -241,7 +244,7 @@ export const demoGuardrails: DemoGuardrail[] = [
       threshold: 0.98,
       validation_method: "sentence",
     },
-    settings: toolGuardrailSettings("on_tool_start", toolRequestFields, 1),
+    settings: toolGuardrailSettings(toolRequestFields, 1),
     trust_impact: "low",
   },
   {
@@ -253,7 +256,7 @@ export const demoGuardrails: DemoGuardrail[] = [
       threshold: 0.7,
       validation_method: "sentence",
     },
-    settings: toolGuardrailSettings("on_tool_start", toolRequestFields, 0),
+    settings: toolGuardrailSettings(toolRequestFields, 0),
     trust_impact: "low",
   },
 ];
