@@ -153,7 +153,7 @@ jobs:
         run: npm run build
 
       - name: Upload Next build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-next-build
           path: .next/
@@ -164,7 +164,7 @@ jobs:
         run: npm pack --json > npm-pack.json
 
       - name: Upload npm package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-npm-package
           path: |
@@ -263,7 +263,7 @@ jobs:
 
       - name: Upload Trivy SARIF artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trivy-release-results
           path: trivy-release-results.sarif
@@ -291,7 +291,7 @@ jobs:
 
       - name: Upload Gitleaks SARIF artifact
         if: always() && hashFiles('results.sarif') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gitleaks-release-results
           path: results.sarif
