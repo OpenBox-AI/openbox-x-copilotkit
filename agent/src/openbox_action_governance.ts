@@ -188,9 +188,6 @@ export type OpenBoxSessionState =
       activityId?: string;
     };
 
-const WORKFLOW_TYPE = "CopilotKitGovernedAction";
-const TASK_QUEUE = "langgraph";
-const CORE_TIMEOUT_MS = 180_000;
 const TOOL_NAME = "openbox_governed_action";
 const TOOL_DESCRIPTION =
   "Execute a realistic business action for the OpenBox governance demo.";

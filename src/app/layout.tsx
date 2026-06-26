@@ -14,6 +14,7 @@ import { OpenBoxBusinessActionResult } from "@/components/openbox-business-resul
 import { ThemeProvider } from "@/hooks/use-theme";
 import { withBasePath } from "@/lib/base-path";
 import { openBoxDemoScenarios } from "@/lib/openbox-demo-scenarios";
+import { markOpenBoxSessionHalted } from "@/lib/openbox-halt-state";
 
 const openBoxTheme = {
   logoSrc: withBasePath("/openbox-mark.png"),
@@ -32,6 +33,7 @@ const openBoxCustomMessageRenderers = [
         {...(props as any)}
         theme={openBoxTheme}
         scenarios={openBoxDemoScenarios as any}
+        onSessionHalted={markOpenBoxSessionHalted}
       />
     ),
     renderActionResult: ({ result }) => (

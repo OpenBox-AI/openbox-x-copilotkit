@@ -15,6 +15,7 @@ import {
 } from "./openbox_scenarios.js";
 
 const AgentStateSchema = new StateSchema({
+  openboxPromptActivityId: zodState(z.string().optional()),
   openboxTimingEvent: zodState(z.record(z.string(), z.unknown()).optional()),
   openboxSession: zodState(
     z
@@ -24,6 +25,7 @@ const AgentStateSchema = new StateSchema({
         haltedAt: z.string().optional(),
         workflowId: z.string().optional(),
         runId: z.string().optional(),
+        promptActivityId: z.string().optional(),
       })
       .default(() => ({ status: "active" as const })),
   ),

@@ -117,6 +117,7 @@ function OpenBoxGovernanceDecisionWithLiveTiming({
       {...(timedProps as any)}
       theme={theme as any}
       scenarios={scenarios as any}
+      onSessionHalted={markOpenBoxSessionHalted}
     />
   );
 }

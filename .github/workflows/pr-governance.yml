@@ -37,7 +37,7 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref }}
         run: |
-          pattern='^(feat|fix|hotfix|chore|docs|refactor|test|ci|build|release)\/[a-z0-9._-]+$'
+          pattern='^((feat|fix|hotfix|chore|docs|refactor|test|ci|build)\/[a-z0-9._-]+|dependabot\/.+|renovate\/.+)$'
           if [[ ! "${BRANCH_NAME}" =~ ${pattern} ]]; then
             echo "Invalid branch name: ${BRANCH_NAME}"
             echo "Expected pattern: <type>/<short-description>"

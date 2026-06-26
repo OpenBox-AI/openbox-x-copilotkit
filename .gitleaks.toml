@@ -1,2 +1,13 @@
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "Historical non-secret A2UI operation key constant"
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''^agent/src/a2ui\.ts$''',
+]
+regexes = [
+  '''A2UI_OPERATIONS_KEY\s*=\s*"[^"]+"''',
+]

@@ -1,7 +1,8 @@
 {
   "name": "openbox-x-copilotkit",
   "version": "0.1.0",
-  "private": false,
+  "private": true,
+  "description": "Proof-of-concept CopilotKit and LangGraph app using the OpenBox SDK.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/OpenBox-AI/openbox-x-copilotkit.git"
@@ -19,14 +20,14 @@
     "openbox:verify": "tsx scripts/openbox-verify.ts",
     "openbox:e2e": "playwright test",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "install:agent": "cd agent && npm install",
     "postinstall": "npm run install:agent"
   },
   "dependencies": {
     "@copilotkit/react-core": "^1.59.3",
     "@copilotkit/runtime": "^1.59.3",
-    "@openbox-ai/openbox-sdk": "^0.1.1",
+    "@openbox-ai/openbox-sdk": "file:../openbox-sdk",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.577.0",
@@ -43,6 +44,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "concurrently": "^10.0.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "16.2.7",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5"

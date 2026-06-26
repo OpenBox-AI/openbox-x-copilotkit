@@ -126,6 +126,9 @@ async function runPlatformTelemetryMatrix() {
     runWithTransientRetry(() => verifySessionTelemetry(), 3),
   );
   await runCheck("platform trust and issue telemetry", () => verifyTrustAndIssueTelemetry());
+  await runCheck("platform observability usage/cost telemetry", () =>
+    verifyObservabilityUsageCostTelemetry(),
+  );
   await runCheck("platform goal drift telemetry", () => verifyGoalDriftTelemetry());
 }
 
@@ -1387,9 +1390,32 @@ async function verifyTrustAndIssueTelemetry() {
     trustHistories: histories.length,
     trustEvents: events.length,
     recovery: summarizeBody(recovery),
-    observability: summarizeBody(observability),
+    observability: summarizeObservabilityUsage(observability),
     issues: issues.length,
   };
+}
+
+async function verifyObservabilityUsageCostTelemetry() {
+  const observability = await fetchBackend(`/agent/${config.agentId}/observability`);
+  const summary = summarizeObservabilityUsage(observability);
+
+  if (summary.tokens.totalTokens <= 0) {
+    throw new Error("Expected observability tokens to include positive token usage after matrix run.");
+  }
+  if (summary.models.totalTokens <= 0) {
+    throw new Error("Expected observability models to include positive model token usage after matrix run.");
+  }
+  if (summary.models.modelNames.length === 0) {
+    throw new Error("Expected observability models to include at least one model name after matrix run.");
+  }
+  if (summary.costs.totalCost <= 0) {
+    throw new Error("Expected observability model costs to be positive after matrix run.");
+  }
+  if (summary.tools.activity <= 0 && summary.tools.rows <= 0) {
+    throw new Error("Expected observability tools matrix to include tool activity after matrix run.");
+  }
+
+  return summary;
 }
 
 async function verifyGoalDriftTelemetry() {
@@ -1625,6 +1651,181 @@ function summarizeBody(body: any) {
   if (Array.isArray(data?.data)) return { count: data.data.length, total: data.total };
   if (data && typeof data === "object") return { keys: Object.keys(data).slice(0, 8) };
   return data;
+}
+
+function summarizeObservabilityUsage(body: any) {
+  const data = body?.data ?? body;
+  const tokens = summarizeTokenUsage(data?.tokens);
+  const models = summarizeModelUsage(data?.models);
+  const costs = summarizeCostUsage(data?.models?.costs ?? data?.costs);
+  const tools = summarizeToolUsage(data?.tools);
+
+  return {
+    keys: data && typeof data === "object" && !Array.isArray(data) ? Object.keys(data).slice(0, 8) : [],
+    tokens,
+    models,
+    costs,
+    tools,
+  };
+}
+
+function summarizeTokenUsage(value: any) {
+  const inputTokens = sumNumericFields(value, isInputTokenKey);
+  const outputTokens = sumNumericFields(value, isOutputTokenKey);
+  const explicitTotalTokens = sumNumericFields(value, isTotalTokenKey);
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: explicitTotalTokens > 0 ? explicitTotalTokens : inputTokens + outputTokens,
+  };
+}
+
+function summarizeModelUsage(value: any) {
+  const stats = Array.isArray(value?.stats) ? value.stats : value;
+  const tokenUsage = summarizeTokenUsage(stats);
+  const modelNames = uniqueStrings(collectStringFields(stats, isModelNameKey)).slice(0, 10);
+  const rows = Array.isArray(stats) ? stats.length : countObjectsWithMatchingKeys(stats, isModelMetricKey);
+  return {
+    rows,
+    modelNames,
+    inputTokens: tokenUsage.inputTokens,
+    outputTokens: tokenUsage.outputTokens,
+    totalTokens: tokenUsage.totalTokens,
+  };
+}
+
+function summarizeCostUsage(value: any) {
+  const modelCosts = Array.isArray(value?.model_costs) ? value.model_costs : value;
+  const totalCost = sumNumericFields(value, isCostKey);
+  const rows = Array.isArray(modelCosts)
+    ? modelCosts.length
+    : countObjectsWithMatchingKeys(modelCosts, isCostKey);
+  return { rows, totalCost };
+}
+
+function summarizeToolUsage(value: any) {
+  const rows = Array.isArray(value) ? value.length : countObjectsWithMatchingKeys(value, isToolMetricKey);
+  return {
+    rows,
+    activity: sumNumericFields(value, isToolActivityKey),
+    successCalls: sumNumericFields(value, isToolSuccessKey),
+    failedCalls: sumNumericFields(value, isToolFailureKey),
+  };
+}
+
+function sumNumericFields(value: any, matches: (key: string) => boolean): number {
+  let total = 0;
+  visitFields(value, (key, fieldValue) => {
+    if (matches(key)) total += toFiniteNumber(fieldValue);
+  });
+  return total;
+}
+
+function collectStringFields(value: any, matches: (key: string) => boolean): string[] {
+  const strings: string[] = [];
+  visitFields(value, (key, fieldValue) => {
+    if (matches(key) && typeof fieldValue === "string" && fieldValue.trim()) {
+      strings.push(fieldValue.trim());
+    }
+  });
+  return strings;
+}
+
+function countObjectsWithMatchingKeys(value: any, matches: (key: string) => boolean): number {
+  let count = 0;
+  visitObjects(value, (record) => {
+    if (Object.keys(record).some(matches)) count += 1;
+  });
+  return count;
+}
+
+function visitFields(
+  value: any,
+  visit: (key: string, fieldValue: any) => void,
+  seen = new Set<object>(),
+) {
+  if (!value || typeof value !== "object") return;
+  if (seen.has(value)) return;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) visitFields(item, visit, seen);
+    return;
+  }
+  for (const [key, fieldValue] of Object.entries(value)) {
+    visit(key, fieldValue);
+    visitFields(fieldValue, visit, seen);
+  }
+}
+
+function visitObjects(
+  value: any,
+  visit: (record: Record<string, any>) => void,
+  seen = new Set<object>(),
+) {
+  if (!value || typeof value !== "object") return;
+  if (seen.has(value)) return;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) visitObjects(item, visit, seen);
+    return;
+  }
+  visit(value);
+  for (const fieldValue of Object.values(value)) visitObjects(fieldValue, visit, seen);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function toFiniteNumber(value: unknown): number {
+  const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : 0;
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizedMetricKey(key: string): string {
+  return key.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+}
+
+function isInputTokenKey(key: string): boolean {
+  return ["inputtokens", "prompttokens", "totalinputtokens"].includes(normalizedMetricKey(key));
+}
+
+function isOutputTokenKey(key: string): boolean {
+  return ["outputtokens", "completiontokens", "totaloutputtokens"].includes(normalizedMetricKey(key));
+}
+
+function isTotalTokenKey(key: string): boolean {
+  return normalizedMetricKey(key) === "totaltokens";
+}
+
+function isModelNameKey(key: string): boolean {
+  return ["model", "modelid", "modelname"].includes(normalizedMetricKey(key));
+}
+
+function isModelMetricKey(key: string): boolean {
+  return isModelNameKey(key) || isInputTokenKey(key) || isOutputTokenKey(key);
+}
+
+function isCostKey(key: string): boolean {
+  return ["cost", "inputcost", "outputcost", "totalcost"].includes(normalizedMetricKey(key));
+}
+
+function isToolMetricKey(key: string): boolean {
+  return ["tool", "toolname"].includes(normalizedMetricKey(key)) || isToolActivityKey(key);
+}
+
+function isToolActivityKey(key: string): boolean {
+  return ["total", "count", "requests", "invocations", "totalcalls", "successcalls", "failedcalls"].includes(
+    normalizedMetricKey(key),
+  );
+}
+
+function isToolSuccessKey(key: string): boolean {
+  return ["success", "successful", "successcalls"].includes(normalizedMetricKey(key));
+}
+
+function isToolFailureKey(key: string): boolean {
+  return ["failed", "failures", "errors", "failedcalls"].includes(normalizedMetricKey(key));
 }
 
 function required(key: string): string {
