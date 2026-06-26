@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 
 loadDotEnvWithoutOverridingProcess();
+assertOpenBoxEnv();
 
 const result = spawnSync(
   'npx',
@@ -36,4 +37,26 @@ function loadDotEnvWithoutOverridingProcess() {
       process.env[key] = rawValue.replace(/^['"]|['"]$/g, '');
     }
   }
+}
+
+function assertOpenBoxEnv() {
+  if (process.env.OPENBOX_ENABLED === "false") return;
+  const missing = [
+    "OPENBOX_ENABLED",
+    "OPENBOX_API_URL",
+    "OPENBOX_CORE_URL",
+    "OPENBOX_API_KEY",
+    "OPENBOX_AGENT_ID",
+    "OPENBOX_AGENT_DID",
+    "OPENBOX_AGENT_PRIVATE_KEY",
+  ].filter((key) => !process.env[key]);
+  if (missing.length === 0) return;
+
+  console.error(
+    `[openbox-demo] Missing required OpenBox env: ${missing.join(", ")}`,
+  );
+  console.error(
+    "[openbox-demo] Set them in .env.openbox or .env before running the governed demo.",
+  );
+  process.exit(1);
 }

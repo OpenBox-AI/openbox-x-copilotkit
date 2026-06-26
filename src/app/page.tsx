@@ -24,6 +24,7 @@ import {
   type CopilotChatSuggestionViewProps,
   useCopilotKit,
 } from "@copilotkit/react-core/v2";
+import { isOpenBoxCopilotResultMessage } from "@openbox-ai/openbox-sdk/copilotkit/react";
 import type { Suggestion } from "@copilotkit/core";
 import {
   OpenBoxLiveTimingProvider,
@@ -40,9 +41,6 @@ const hasSuggestionClass = (suggestion: Suggestion, className: string) =>
 
 const isOpenBoxWorkflowSuggestion = (suggestion: Suggestion) =>
   hasSuggestionClass(suggestion, "openbox-workflow-suggestion");
-
-const isOpenBoxDisabledSuggestion = (suggestion: Suggestion) =>
-  hasSuggestionClass(suggestion, "openbox-disabled-suggestion");
 
 export default function HomePage() {
   const [isOpenBoxHalted, setIsOpenBoxHalted] = useState(() => {
@@ -151,7 +149,7 @@ function OpenBoxMessageViewContent(
           >
             {messageElements.filter(
               (_element, index) =>
-                !shouldHideRawOpenBoxResultMessage(slotMessages[index]),
+                !isOpenBoxCopilotResultMessage(slotMessages[index]),
             )}
             {interruptElement}
             {showCursor ? (
@@ -172,24 +170,6 @@ function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function shouldHideRawOpenBoxResultMessage(message: unknown) {
-  const record = recordValue(message);
-  const role = stringValue(record.role ?? record.type);
-  if (role !== "assistant" && role !== "ai") return false;
-  const content = stringValue(record.content);
-  if (!content.includes("openbox.copilotkit.result.v1")) return false;
-  try {
-    const parsed = JSON.parse(content);
-    return recordValue(parsed).schemaVersion === "openbox.copilotkit.result.v1";
-  } catch {
-    return true;
-  }
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value : "";
 }
 
 const OpenBoxSuggestionView = forwardRef<
@@ -241,11 +221,7 @@ const OpenBoxSuggestionView = forwardRef<
               key={`${suggestion.title}-${index}`}
               suggestion={suggestion}
               index={index}
-              isLoading={
-                !isOpenBoxDisabledSuggestion(suggestion) &&
-                (!isRuntimeReady || loadingSet.has(index) || suggestion.isLoading)
-              }
-              isDisabled={isOpenBoxDisabledSuggestion(suggestion)}
+              isLoading={!isRuntimeReady || loadingSet.has(index) || suggestion.isLoading}
               onSelectSuggestion={isRuntimeReady ? selectSuggestion : undefined}
               className={suggestion.className}
             />
@@ -322,14 +298,12 @@ function SuggestionButton({
   suggestion,
   index,
   isLoading,
-  isDisabled,
   onSelectSuggestion,
   className,
 }: {
   suggestion: Suggestion;
   index: number;
   isLoading?: boolean;
-  isDisabled?: boolean;
   onSelectSuggestion?: CopilotChatSuggestionViewProps["onSelectSuggestion"];
   className?: string;
 }) {
@@ -337,10 +311,9 @@ function SuggestionButton({
     <CopilotChatSuggestionPill
       className={className ?? suggestion.className}
       isLoading={isLoading}
-      disabled={isDisabled}
       type="button"
       onClick={() => {
-        if (!isDisabled) onSelectSuggestion?.(suggestion, index);
+        onSelectSuggestion?.(suggestion, index);
       }}
     >
       {suggestion.title}
@@ -356,14 +329,14 @@ function OpenBoxHaltedOverlay() {
 
   return (
     <div className="pointer-events-none absolute inset-x-4 bottom-24 z-30 flex justify-center">
-      <div className="pointer-events-auto w-full max-w-md rounded-md border border-orange-500/30 bg-[var(--background)]/95 px-4 py-3 text-sm text-orange-700 shadow-lg shadow-black/15 backdrop-blur">
+      <div className="pointer-events-auto w-full max-w-md rounded-md border border-red-500/40 bg-[var(--background)]/95 px-4 py-3 text-sm text-red-700 shadow-lg shadow-black/15 backdrop-blur">
         <div className="font-medium">OpenBox halted this session.</div>
-        <div className="mt-1 text-orange-700">
+        <div className="mt-1 text-red-700">
           Start a new chat or reset before sending another governed request.
         </div>
         <button
           type="button"
-          className="mt-3 rounded-md border border-orange-500/30 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-500/10"
+          className="mt-3 rounded-md border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-500/10"
           onClick={reset}
         >
           Reset demo

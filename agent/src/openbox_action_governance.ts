@@ -467,7 +467,7 @@ function handoffChoiceProfile(choiceId: HandoffChoiceId): {
   return {
     destination: "External review workspace",
     audience: "External reviewer",
-    fields: ["summary", "service_tier", "timeline", "owner_note"],
+    fields: ["summary", "timeline"],
     sensitivity: "internal",
   };
 }
@@ -530,7 +530,7 @@ async function executionArtifact(
 
   if (input.action === "review_data_handoff") {
     const evidence = businessEvidenceFromRequest(input, {
-      defaultFields: ["summary", "service_tier", "timeline", "owner_note"],
+      defaultFields: ["summary", "timeline"],
     });
     return generateBusinessArtifact(input, {
       type: "data_handoff",
@@ -538,7 +538,7 @@ async function executionArtifact(
       destination: input.destination || "External review workspace",
       fields: input.fields?.length
         ? input.fields
-        : ["summary", "service_tier", "timeline", "owner_note"],
+        : ["summary", "timeline"],
       audience: input.audience || "External reviewer",
       records: evidence.records,
       sourceContext:

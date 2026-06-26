@@ -12,7 +12,6 @@ import {
 
 import { OpenBoxBusinessActionResult } from "@/components/openbox-business-result";
 import { withBasePath } from "@/lib/base-path";
-import { openBoxDemoScenarios } from "@/lib/openbox-demo-scenarios";
 import { markOpenBoxSessionHalted } from "@/lib/openbox-halt-state";
 import {
   useOpenBoxLiveTimingValue,
@@ -80,7 +79,6 @@ export const useGenerativeUIExamples = () => {
       choiceId: z.enum(["minimal", "growth", "sensitive"]).optional(),
     }),
     theme: openBoxTheme,
-    scenarios: openBoxDemoScenarios as any,
     approvalClient: createOpenBoxApprovalClient({
       endpoint: withBasePath("/api/openbox/approvals/decide"),
     }),
@@ -89,7 +87,6 @@ export const useGenerativeUIExamples = () => {
         <OpenBoxGovernanceDecisionWithLiveTiming
           props={props}
           theme={openBoxTheme}
-          scenarios={openBoxDemoScenarios as any}
         />
       );
     },
@@ -103,11 +100,9 @@ export const useGenerativeUIExamples = () => {
 function OpenBoxGovernanceDecisionWithLiveTiming({
   props,
   theme,
-  scenarios,
 }: {
   props: Record<string, unknown>;
   theme: Record<string, unknown>;
-  scenarios: unknown;
 }) {
   const liveTiming = useOpenBoxLiveTimingValue();
   const timedProps = withOpenBoxLiveTimingProps(props as any, liveTiming);
@@ -116,7 +111,6 @@ function OpenBoxGovernanceDecisionWithLiveTiming({
     <OpenBoxGovernanceDecision
       {...(timedProps as any)}
       theme={theme as any}
-      scenarios={scenarios as any}
       onSessionHalted={markOpenBoxSessionHalted}
     />
   );

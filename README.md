@@ -14,6 +14,10 @@ npm install
 ```
 
 The example uses the published `@openbox-ai/openbox-sdk` package from npm.
+For sibling SDK development, run the local SDK command below. It builds
+`../openbox-sdk`, packs it locally, and installs that package into both the
+Next app and LangGraph agent packages so the demo uses the same package shape as
+a real npm install.
 
 ## Configure
 
@@ -48,6 +52,12 @@ OPENBOX_BACKEND_API_KEY=obx_key_org_or_backend_api_key
 
 ```bash
 npm run dev
+```
+
+For local SDK development:
+
+```bash
+npm run dev:local-sdk
 ```
 
 Default local services:

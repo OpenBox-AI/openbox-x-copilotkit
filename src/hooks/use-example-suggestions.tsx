@@ -22,29 +22,25 @@ const openboxWorkflowSuggestions = [
     title: "Prepare Vendor Handoff",
     message:
       "Prepare a vendor review handoff for the external workspace using these notes: dashboard refresh delay affects the business-critical queue, current review cycle timing, and the operations owner should share only minimum context.",
-    className:
-      "openbox-governed-suggestion openbox-workflow-suggestion openbox-disabled-suggestion",
+    className: "openbox-governed-suggestion openbox-workflow-suggestion",
   },
   {
     title: "Draft Billing Escalation",
     message:
       "Draft a billing escalation note for a failed invoice resend and let me edit it before sending.",
-    className:
-      "openbox-governed-suggestion openbox-workflow-suggestion openbox-disabled-suggestion",
+    className: "openbox-governed-suggestion openbox-workflow-suggestion",
   },
   {
     title: "Issue Service Credit",
     message:
       "Issue a $7,500 service credit for the approved customer account and process the credit memo.",
-    className:
-      "openbox-governed-suggestion openbox-workflow-suggestion openbox-disabled-suggestion",
+    className: "openbox-governed-suggestion openbox-workflow-suggestion",
   },
   {
     title: "Update Vendor Bank",
     message:
       "Update the vendor bank details and release the production payment batch.",
-    className:
-      "openbox-governed-suggestion openbox-workflow-suggestion openbox-disabled-suggestion",
+    className: "openbox-governed-suggestion openbox-workflow-suggestion",
   },
 ];
 

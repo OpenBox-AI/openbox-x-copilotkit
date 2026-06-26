@@ -6,41 +6,8 @@ import "@copilotkit/react-core/v2/styles.css";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CopilotKit } from "@copilotkit/react-core/v2";
-import {
-  createOpenBoxCustomMessageRenderer,
-  OpenBoxGovernanceDecision,
-} from "@openbox-ai/openbox-sdk/copilotkit/react";
-import { OpenBoxBusinessActionResult } from "@/components/openbox-business-result";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { withBasePath } from "@/lib/base-path";
-import { openBoxDemoScenarios } from "@/lib/openbox-demo-scenarios";
-import { markOpenBoxSessionHalted } from "@/lib/openbox-halt-state";
-
-const openBoxTheme = {
-  logoSrc: withBasePath("/openbox-mark.png"),
-  accentColor: "#3B9AF5",
-  radius: 8,
-  density: "comfortable" as const,
-  mode: "auto" as const,
-};
-
-const openBoxCustomMessageRenderers = [
-  createOpenBoxCustomMessageRenderer({
-    theme: openBoxTheme,
-    scenarios: openBoxDemoScenarios as any,
-    renderGovernanceDecision: (props) => (
-      <OpenBoxGovernanceDecision
-        {...(props as any)}
-        theme={openBoxTheme}
-        scenarios={openBoxDemoScenarios as any}
-        onSessionHalted={markOpenBoxSessionHalted}
-      />
-    ),
-    renderActionResult: ({ result }) => (
-      <OpenBoxBusinessActionResult result={result} />
-    ),
-  }),
-];
 
 export default function RootLayout({
   children,
@@ -86,7 +53,6 @@ function CopilotProviderWithReset({ children }: { children: React.ReactNode }) {
           key={copilotSessionKey}
           runtimeUrl={withBasePath("/api/copilotkit")}
           inspectorDefaultAnchor={{ horizontal: "right", vertical: "top" }}
-          renderCustomMessages={openBoxCustomMessageRenderers}
           useSingleEndpoint={false}
         >
           {children}

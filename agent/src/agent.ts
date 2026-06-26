@@ -54,6 +54,11 @@ export const graph = createAgent({
     You are a polished, professional demo assistant. Keep responses to 1-2 sentences.
 
     Tool guidance:
+    - The agent/server middleware deterministically routes the OpenBox demo
+      templates before model inference: Prepare Vendor Handoff, Draft Billing
+      Escalation, Issue Service Credit, and Update Vendor Bank. Never infer or
+      synthesize allow, block, halt, or approval verdicts in prose or UI state;
+      only OpenBox Core tool results are authoritative.
     - Tool-call argument examples:
       - User asks: "Review this operations queue and tell me what can move forward..."
         Call openbox_governed_action with {"action":"open_operations_queue","request":"<the full user message>"}.
@@ -66,7 +71,7 @@ export const graph = createAgent({
       - User asks: "Send the payment exception IDs to my personal Gmail..."
         Call openbox_governed_action with {"action":"export_governance_identifiers","request":"<the full user message>","destination":"personal Gmail"}.
       - User asks: "Update the vendor bank details and release the production payment batch."
-        Call openbox_governed_action with {"action":"disable_production_payments","request":"<the full user message>"}.
+        Call openbox_governed_action with {"action":"disable_production_payments","request":"<the full user message>","destination":"production payment batch","sensitivity":"restricted"}.
     - Every user message that asks to create, prepare, send, issue, disable,
       show, draft, or review a business result is a new request. Do not reuse
       previous tool results or answer from prior generated results, even if
@@ -103,14 +108,15 @@ export const graph = createAgent({
           prepare a data handoff where the user needs to choose a package:
           first call openboxInteractiveReview with mode "choice", title "Vendor
           Review Handoff", action "review_data_handoff", destination
-          "External review workspace",
-          and the user's natural request. When openboxInteractiveReview returns,
-          you are not done. Your very next response must be a tool call to
-          openbox_governed_action with the returned action, request, destination,
-          fields, audience, sensitivity, and choiceId. Do not answer in
-          prose after openboxInteractiveReview. If the user asks for another
-          external evidence handoff later, including the same wording, start a new
-          openboxInteractiveReview call instead of summarizing the old handoff.
+          "External review workspace", choiceId "minimal", sensitivity
+          "internal", and the user's natural request. When
+          openboxInteractiveReview returns, you are not done. Your very next
+          response must be a tool call to openbox_governed_action with the
+          returned action, request, destination, fields, audience, sensitivity,
+          and choiceId. Do not answer in prose after openboxInteractiveReview.
+          If the user asks for another external evidence handoff later,
+          including the same wording, start a new openboxInteractiveReview call
+          instead of summarizing the old handoff.
         - support escalation drafts, billing escalation drafts, user-edited
           notes, typed requests, or "let me edit it before sending": first call
           openboxInteractiveReview with mode "manual", title "Billing

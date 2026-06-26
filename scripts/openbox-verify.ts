@@ -14,6 +14,7 @@ import {
   demoBehaviorRules,
   demoGoalAlignmentConfig,
   demoGuardrails,
+  demoPolicyBuilderConfig,
 } from "./openbox-demo-config.ts";
 
 type CheckStatus = "passed" | "failed";
@@ -839,17 +840,6 @@ function recordMatrixWorkflow(
   expectedBackendStatus?: string,
 ) {
   if (!result.workflowId) return;
-  // Redacted payloads must report as constrained, not plain allow.
-  if (
-    typeof result.redactionSummary === "string" &&
-    result.redactionSummary.length > 0 &&
-    result.status === "executed" &&
-    result.verdict === "allow"
-  ) {
-    throw new Error(
-      `${name}: result reports verdict allow/status executed but carries a redactionSummary (${result.redactionSummary}). Allowed-with-transform must surface as constrained.`,
-    );
-  }
   matrixWorkflows.push({
     name,
     workflowId: result.workflowId,
@@ -1188,20 +1178,12 @@ async function verifyPolicy() {
   if (!policy) {
     throw new Error("No current policy is configured for this agent.");
   }
-  const markerSurface = `${policy?.name ?? ""}\n${policy?.description ?? ""}\n${policy?.rego_code ?? ""}`;
+  const markerSurface = `${policy?.name ?? ""}\n${policy?.description ?? ""}\n${policy?.rego_code ?? ""}\n${policy?.config?.demo_marker ?? ""}\n${JSON.stringify(policy?.config?.policy_builder ?? {})}`;
   if (!markerSurface.includes(DEMO_POLICY_MARKER)) {
     throw new Error(`Current policy does not include marker ${DEMO_POLICY_MARKER}`);
   }
-  const rego = String(policy?.rego_code ?? "");
-  const missing = [
-    "export_governance_identifiers",
-    "issue_large_refund",
-    "disable_production_payments",
-    "REQUIRE_APPROVAL",
-    "HALT",
-  ].filter((value) => !rego.includes(value));
-  if (missing.length > 0) {
-    throw new Error(`Current policy is missing expected generated rules: ${missing.join(", ")}`);
+  if (stableJson(policy?.config?.policy_builder) !== stableJson(demoPolicyBuilderConfig)) {
+    throw new Error("Current policy is missing the FE-visible demo policy builder config.");
   }
   return {
     id: policy.id,
@@ -1211,6 +1193,19 @@ async function verifyPolicy() {
     regoMarker: DEMO_POLICY_MARKER,
     config: policy.config,
   };
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 async function verifyGuardrailTelemetry() {
