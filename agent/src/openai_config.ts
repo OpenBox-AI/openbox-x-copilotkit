@@ -4,6 +4,10 @@ import {
   type ChatOpenAIFields,
 } from "@langchain/openai";
 
+// OpenBox instruments the global fetch (registerOpenBoxOtel, called inside the
+// SDK middleware) so the real provider request/response is captured into
+// llm_completion spans without any per-client wiring here.
+
 const openAIBaseUrl = process.env.OPENAI_BASE_URL;
 const openAIApiKey = process.env.OPENAI_API_KEY;
 

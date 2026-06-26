@@ -6,6 +6,11 @@ import {
   OpenBoxCopilotKitError,
 } from "@openbox-ai/openbox-sdk/copilotkit";
 
+// Demo parity: store the real captured provider headers/body verbatim in
+// llm_completion spans (no redaction) and let the captured span be authoritative.
+process.env.OPENBOX_CAPTURE_RAW_HEADERS ??= "true";
+process.env.OPENBOX_LLM_SPANS_FROM_CAPTURE ??= "true";
+
 const WORKFLOW_TYPE = "CopilotKitLangGraphAgent";
 const TASK_QUEUE = "copilotkit-langgraph";
 const CORE_TIMEOUT_MS = 180_000;

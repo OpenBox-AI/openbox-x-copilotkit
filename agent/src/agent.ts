@@ -6,6 +6,7 @@ import {
   zodState,
 } from "@copilotkit/sdk-js/langgraph";
 import { StateSchema } from "@langchain/langgraph";
+import { registerOpenBoxOtel } from "@openbox-ai/openbox-sdk/copilotkit";
 import { createConfiguredChatOpenAI } from "./openai_config.js";
 import { createOpenBoxGovernanceMiddleware } from "./openbox_governance.js";
 import {
@@ -13,6 +14,11 @@ import {
   openbox_governed_approval_action,
   openbox_resume_governed_action,
 } from "./openbox_scenarios.js";
+
+// SDK-owned OTel wiring: patch the global fetch before the model client is
+// constructed so the real OpenAI request/response (headers, raw body, status)
+// is captured into OpenBox llm_completion spans. Idempotent.
+registerOpenBoxOtel();
 
 const AgentStateSchema = new StateSchema({
   openboxPromptActivityId: zodState(z.string().optional()),
