@@ -57,7 +57,15 @@ npm run dev
 For local SDK development:
 
 ```bash
+npm run openbox:sdk:local
 npm run dev:local-sdk
+```
+
+If your shell is already inside `agent/`, use the same wrapper there:
+
+```bash
+npm run openbox:sdk:local
+npm run dev
 ```
 
 Default local services:

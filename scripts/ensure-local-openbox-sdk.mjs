@@ -6,7 +6,7 @@ import {
   readFileSync,
   rmSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -38,11 +38,11 @@ console.log(
 function assertSdkPackage() {
   const packagePath = join(SDK_DIR, "package.json");
   if (!existsSync(packagePath)) {
-    fail(`OPENBOX_SDK_DIR does not contain package.json: ${SDK_DIR}`);
+    fail(`OPENBOX_SDK_DIR does not contain package.json: ${relativePath(SDK_DIR)}`);
   }
   const pkg = JSON.parse(readFileSync(packagePath, "utf8"));
   if (pkg.name !== "@openbox-ai/openbox-sdk") {
-    fail(`OPENBOX_SDK_DIR is not @openbox-ai/openbox-sdk: ${SDK_DIR}`);
+    fail(`OPENBOX_SDK_DIR is not @openbox-ai/openbox-sdk: ${relativePath(SDK_DIR)}`);
   }
 }
 
@@ -112,7 +112,7 @@ function run(command, commandArgs, cwd) {
 }
 
 function relativePath(path) {
-  return path.startsWith(ROOT_DIR) ? `.${path.slice(ROOT_DIR.length) || ""}` : path;
+  return path.startsWith(ROOT_DIR) ? `.${path.slice(ROOT_DIR.length) || ""}` : basename(path);
 }
 
 function fail(message) {

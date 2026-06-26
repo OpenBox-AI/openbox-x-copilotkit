@@ -8,7 +8,9 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "npx @langchain/langgraph-cli@1.2.1 dev --port 8123 --no-browser"
+    "dev": "npx @langchain/langgraph-cli@1.2.1 dev --port 8123 --no-browser",
+    "openbox:sdk:local": "cd .. && npm run openbox:sdk:local",
+    "openbox:sdk:verify": "cd .. && npm run openbox:sdk:verify"
   },
   "dependencies": {
     "@copilotkit/sdk-js": "^1.59.3",
