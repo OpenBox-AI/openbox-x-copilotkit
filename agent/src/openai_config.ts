@@ -64,6 +64,11 @@ export async function invokeConfiguredJsonChat(input: {
   if (!model) {
     throw new Error("OPENAI_MODEL is required for JSON generation.");
   }
+  // Reasoning models (gpt-5*, o1/o3/o4) reject `max_tokens` and a non-default
+  // `temperature`; they use `max_completion_tokens`. Match what ChatOpenAI does
+  // so the raw JSON-generation call works across model families.
+  const isReasoningModel = /^(gpt-5|o[134])/.test(model);
+  const tokenLimit = input.maxTokens ?? maxTokens;
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
@@ -72,8 +77,9 @@ export async function invokeConfiguredJsonChat(input: {
     },
     body: JSON.stringify({
       model,
-      max_tokens: input.maxTokens ?? maxTokens,
-      temperature: input.temperature,
+      ...(isReasoningModel
+        ? { max_completion_tokens: tokenLimit }
+        : { max_tokens: tokenLimit, temperature: input.temperature }),
       response_format: { type: "json_object" },
       messages: input.messages,
     }),
