@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Image from "next/image";
 import { withBasePath } from "@/lib/base-path";
 
 interface ExampleLayoutProps {
@@ -19,9 +20,11 @@ export function ExampleLayout({
           <span className="font-extrabold text-2xl pb-1.5">
             OpenBox x CopilotKit
           </span>
-          <img
+          <Image
             src={withBasePath("/copilotkit-logo-mark.svg")}
             alt="CopilotKit"
+            width={28}
+            height={28}
             className="h-7"
           />
         </div>

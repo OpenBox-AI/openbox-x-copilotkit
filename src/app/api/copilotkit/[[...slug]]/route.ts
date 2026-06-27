@@ -9,6 +9,13 @@ import {
   createOpenBoxCopilotRuntime,
 } from "@openbox-ai/openbox-sdk/copilotkit";
 
+// Demo parity with the Temporal/OTel reference: the real provider exchange is
+// captured at the agent's model client and becomes the authoritative
+// llm_completion span, so this runtime process suppresses its reconstructed
+// span and stores captured headers verbatim (no redaction).
+process.env.OPENBOX_LLM_SPANS_FROM_CAPTURE ??= "true";
+process.env.OPENBOX_CAPTURE_RAW_HEADERS ??= "true";
+
 const CORE_TIMEOUT_MS = 180_000;
 const LANGGRAPH_STREAM_MODE = [
   "events",

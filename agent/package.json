@@ -8,15 +8,18 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "npx @langchain/langgraph-cli@1.2.1 dev --port 8123 --no-browser"
+    "dev": "npx @langchain/langgraph-cli@1.2.1 dev --port 8123 --no-browser",
+    "openbox:sdk:local": "cd .. && npm run openbox:sdk:local",
+    "openbox:sdk:verify": "cd .. && npm run openbox:sdk:verify"
   },
   "dependencies": {
     "@copilotkit/sdk-js": "^1.59.3",
     "@langchain/core": "^1.1.48",
     "@langchain/langgraph": "^1.3.4",
     "@langchain/openai": "^1.4.7",
-    "@openbox-ai/openbox-sdk": "^0.1.1",
-    "langchain": "^1.4.4"
+    "@openbox-ai/openbox-sdk": "file:../../openbox-sdk",
+    "langchain": "^1.4.4",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

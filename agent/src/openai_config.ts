@@ -4,14 +4,23 @@ import {
   type ChatOpenAIFields,
 } from "@langchain/openai";
 
+// OpenBox instruments the global fetch (registerOpenBoxOtel, called inside the
+// SDK middleware) so the real provider request/response is captured into
+// llm_completion spans without any per-client wiring here.
+
 const openAIBaseUrl = process.env.OPENAI_BASE_URL;
 const openAIApiKey = process.env.OPENAI_API_KEY;
 
+// Default raised from 1024: reasoning models (gpt-5-nano) spend completion
+// tokens on internal reasoning first, so on a heavy prompt the whole 1024 was
+// consumed by reasoning_tokens and the call hit finish_reason:"length" with an
+// empty content and NO tool call — nothing for the frontend to render. 4096
+// leaves room to reason AND emit the tool call.
 const openAIMaxTokens = Number.parseInt(
-  process.env.OPENAI_MAX_TOKENS || "1024",
+  process.env.OPENAI_MAX_TOKENS || "4096",
   10,
 );
-const maxTokens = Number.isFinite(openAIMaxTokens) ? openAIMaxTokens : 1024;
+const maxTokens = Number.isFinite(openAIMaxTokens) ? openAIMaxTokens : 4096;
 const strictToolCalling = process.env.OPENAI_STRICT_TOOL_CALLING === "true";
 
 export function createConfiguredChatOpenAI(
@@ -60,6 +69,11 @@ export async function invokeConfiguredJsonChat(input: {
   if (!model) {
     throw new Error("OPENAI_MODEL is required for JSON generation.");
   }
+  // Reasoning models (gpt-5*, o1/o3/o4) reject `max_tokens` and a non-default
+  // `temperature`; they use `max_completion_tokens`. Match what ChatOpenAI does
+  // so the raw JSON-generation call works across model families.
+  const isReasoningModel = /^(gpt-5|o[134])/.test(model);
+  const tokenLimit = input.maxTokens ?? maxTokens;
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
@@ -68,8 +82,9 @@ export async function invokeConfiguredJsonChat(input: {
     },
     body: JSON.stringify({
       model,
-      max_tokens: input.maxTokens ?? maxTokens,
-      temperature: input.temperature,
+      ...(isReasoningModel
+        ? { max_completion_tokens: tokenLimit }
+        : { max_tokens: tokenLimit, temperature: input.temperature }),
       response_format: { type: "json_object" },
       messages: input.messages,
     }),

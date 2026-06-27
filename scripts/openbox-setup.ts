@@ -5,7 +5,9 @@ import {
   demoBehaviorRules,
   demoGoalAlignmentConfig,
   demoGuardrails,
+  demoPolicyBuilderConfig,
   demoPolicyRules,
+  obsoleteDemoBehaviorRuleNames,
   obsoleteDemoGuardrailNames,
 } from "./openbox-demo-config.ts";
 
@@ -121,6 +123,16 @@ async function ensureGuardrails(client: OpenBoxClient, agentId: string) {
 
 async function ensureBehaviorRules(client: OpenBoxClient, agentId: string) {
   const existing = await listBehaviorRules(client, agentId);
+  for (const obsoleteName of obsoleteDemoBehaviorRuleNames) {
+    const match = existing.find((item) => item.rule_name === obsoleteName);
+    if (match?.id && match.is_active !== false) {
+      await client.toggleBehaviorRuleStatus(agentId, match.id, {
+        is_active: false,
+      });
+      console.log(`deactivated obsolete ${obsoleteName}`);
+    }
+  }
+
   for (const rule of demoBehaviorRules) {
     const matches = existing.filter((item) => item.rule_name === rule.rule_name);
     const match = matches[0];
@@ -197,14 +209,17 @@ async function ensurePolicy(client: OpenBoxClient, config: DemoConfig) {
       "OpenBox demo policy for goal drift, destination controls, HITL approval, and payment-control halt.",
     rego_code: demoPolicyRules,
     input: {},
-    config: {},
+    config: {
+      demo_marker: DEMO_POLICY_MARKER,
+      policy_builder: demoPolicyBuilderConfig,
+    },
     trust_impact: "medium" as const,
   };
   if (policyUsesDemoRules(current) && current?.id) {
     const isFresh =
       current.name === nextPolicy.name &&
       current.description === nextPolicy.description &&
-      current.rego_code === nextPolicy.rego_code;
+      policyBuilderMatches(current.config?.policy_builder, demoPolicyBuilderConfig);
     if (isFresh) {
       console.log(`policy already uses ${DEMO_POLICY_MARKER}`);
       return;
@@ -245,12 +260,40 @@ function pickCurrentPolicy(response: any): Record<string, any> | undefined {
 }
 
 function policyUsesDemoRules(policy: Record<string, any> | undefined): boolean {
+  if (!policy) return false;
+  const markerSurface = [
+    policy.name,
+    policy.description,
+    policy.rego_code,
+    policy.config?.demo_marker,
+    JSON.stringify(policy.config?.policy_builder ?? {}),
+  ]
+    .filter(Boolean)
+    .join("\n");
+  if (!markerSurface.includes(DEMO_POLICY_MARKER)) return false;
   return (
-    typeof policy?.rego_code === "string" &&
-    policy.rego_code.includes(DEMO_POLICY_MARKER) &&
-    policy.rego_code.includes("goal drift") &&
-    policy.rego_code.includes('"action": "halt"')
+    policyBuilderMatches(policy.config?.policy_builder, demoPolicyBuilderConfig) ||
+    (typeof policy.rego_code === "string" &&
+      policy.rego_code.includes("goal drift") &&
+      policy.rego_code.includes('"action": "halt"'))
   );
+}
+
+function policyBuilderMatches(actual: unknown, expected: unknown): boolean {
+  return stableJson(actual) === stableJson(expected);
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function activeByName(rows: Array<Record<string, any>>, field: string, name: string) {

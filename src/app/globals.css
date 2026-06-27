@@ -97,6 +97,15 @@ html {
   background: color-mix(in srgb, #3b9af5 11%, var(--background));
 }
 
+[data-copilotkit] button[data-slot="suggestion-pill"].openbox-disabled-suggestion,
+[data-copilotkit] button[data-slot="suggestion-pill"].openbox-disabled-suggestion:disabled {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--muted) 80%, var(--background));
+  color: var(--muted-foreground);
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
 .openbox-business-result {
   margin-top: 1.25rem;
   width: 100%;
@@ -106,6 +115,7 @@ html {
   color: var(--card-foreground);
   overflow: hidden;
 }
+
 
 .openbox-business-header {
   padding: 1rem 1rem 0.875rem;

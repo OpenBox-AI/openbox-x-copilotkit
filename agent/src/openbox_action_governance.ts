@@ -2,6 +2,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { type SpanData, type WorkflowVerdict } from "@openbox-ai/openbox-sdk/core-client";
 import {
   createGovernedCopilotTool,
+  databaseSelectSpan,
+  fileReadSpan,
   type OpenBoxCopilotActionInput,
   type OpenBoxCopilotTimingEvent,
 } from "@openbox-ai/openbox-sdk/copilotkit";
@@ -19,7 +21,9 @@ export type GovernedAction =
   | "review_data_handoff"
   | "submit_manual_request"
   | "view_governance_report"
-  | "draft_policy_constrained_message";
+  | "draft_policy_constrained_message"
+  | "read_vault_secret"
+  | "check_access_grant";
 
 export interface GovernedActionInput extends OpenBoxCopilotActionInput {
   action: GovernedAction;
@@ -188,9 +192,6 @@ export type OpenBoxSessionState =
       activityId?: string;
     };
 
-const WORKFLOW_TYPE = "CopilotKitGovernedAction";
-const TASK_QUEUE = "langgraph";
-const CORE_TIMEOUT_MS = 180_000;
 const TOOL_NAME = "openbox_governed_action";
 const TOOL_DESCRIPTION =
   "Execute a realistic business action for the OpenBox governance demo.";
@@ -208,6 +209,7 @@ const governedCopilotTool = createGovernedCopilotTool<
   normalizeInput: normalizeGovernedInput,
   execute: async (input) => executionArtifact(input),
   spanProfile,
+  operationSpans,
   onTimingEvent: emitOpenBoxTimingEvent,
 });
 
@@ -470,7 +472,7 @@ function handoffChoiceProfile(choiceId: HandoffChoiceId): {
   return {
     destination: "External review workspace",
     audience: "External reviewer",
-    fields: ["summary", "service_tier", "timeline", "owner_note"],
+    fields: ["summary", "timeline"],
     sensitivity: "internal",
   };
 }
@@ -533,7 +535,7 @@ async function executionArtifact(
 
   if (input.action === "review_data_handoff") {
     const evidence = businessEvidenceFromRequest(input, {
-      defaultFields: ["summary", "service_tier", "timeline", "owner_note"],
+      defaultFields: ["summary", "timeline"],
     });
     return generateBusinessArtifact(input, {
       type: "data_handoff",
@@ -541,7 +543,7 @@ async function executionArtifact(
       destination: input.destination || "External review workspace",
       fields: input.fields?.length
         ? input.fields
-        : ["summary", "service_tier", "timeline", "owner_note"],
+        : ["summary", "timeline"],
       audience: input.audience || "External reviewer",
       records: evidence.records,
       sourceContext:
@@ -1188,6 +1190,19 @@ function spanProfile(input: GovernedActionInput): Pick<SpanData, "name" | "kind"
     };
   }
 
+  if (input.action === "read_vault_secret") {
+    return businessSpan("openbox.vault_secret.read", {
+      "openbox.operation": "read_vault_secret",
+      "openbox.sensitivity": "restricted",
+    });
+  }
+
+  if (input.action === "check_access_grant") {
+    return businessSpan("openbox.access_grant.lookup", {
+      "openbox.operation": "lookup_access_grant",
+    });
+  }
+
   return {
     name: `internal.${input.action}`,
     kind: "internal",
@@ -1195,6 +1210,34 @@ function spanProfile(input: GovernedActionInput): Pick<SpanData, "name" | "kind"
       "openbox.span.category": "internal_workflow",
     },
   };
+}
+
+// Emit the underlying operation spans OpenBox Core uses for behavioral rules.
+// The platform blocks `file_read` of secret paths (.env, secrets/**,
+// credentials/**, vault/**, *.pem, *.key) unless a prior `database_select`
+// access-record lookup happened within 300s. read_vault_secret emits the
+// file_read span; check_access_grant emits the database_select span that
+// satisfies the rule when it runs first.
+function operationSpans(
+  input: GovernedActionInput,
+  stage: "started" | "completed",
+  activityId: string,
+): SpanData[] {
+  if (input.action === "read_vault_secret") {
+    return [fileReadSpan("vault/credentials/prod.env", stage, activityId)];
+  }
+
+  if (input.action === "check_access_grant") {
+    return [
+      databaseSelectSpan(
+        "SELECT grant_id, scope FROM access_grants WHERE subject = current_agent()",
+        stage,
+        activityId,
+      ),
+    ];
+  }
+
+  return [];
 }
 
 function businessSpan(

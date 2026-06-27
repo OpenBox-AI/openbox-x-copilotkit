@@ -1,7 +1,71 @@
 export const DEMO_PREFIX = "copilotkit-demo/";
 export const DEMO_POLICY_MARKER = "copilotkit-demo/openbox-governance-matrix-v4";
-export const DEMO_BEHAVIOR_RULE_NAME = `${DEMO_PREFIX}llm-tool-call-governance-observed`;
+export const DEMO_BEHAVIOR_RULE_NAME = `${DEMO_PREFIX}external-post-requires-database-read`;
 const GOVERNED_TOOL_ACTIVITY_TYPE = "openbox_governed_action";
+
+const demoStory = {
+  financeExceptions: [
+    {
+      accountId: "acct_9281",
+      amount: "$14,400",
+      invoiceId: "INV-4472",
+      contact: "avery@example.com",
+      theme: "failed payment retry",
+    },
+    {
+      accountId: "acct_24819",
+      amount: "$12,400",
+      invoiceId: "INV-1048",
+      contact: "riley.morgan@example.com",
+      theme: "missing purchase order",
+    },
+  ],
+  restrictedDestinations: [
+    "personal Gmail",
+    "unapproved spreadsheet",
+    "external review worksheet",
+  ],
+  restrictedControls: [
+    "production admin token",
+    "admin token",
+    "production token",
+    "session export",
+    "control export",
+  ],
+  internalEvidenceFields: [
+    "agent_id",
+    "session_id",
+    "workflow_id",
+    "policy_id",
+    "source_id",
+  ],
+} as const;
+
+const storyBusinessIdentifiers = [
+  ...demoStory.financeExceptions.flatMap((item) => [
+    item.accountId,
+    item.amount,
+    item.amount.replace("$", ""),
+    item.invoiceId,
+    item.contact,
+    item.theme,
+  ]),
+  "account identifier",
+  "customer contact",
+  "phone number",
+  "payment amount",
+  "acct_",
+];
+
+const storyRestrictedEgressPhrases = [
+  ...demoStory.restrictedDestinations,
+  ...demoStory.restrictedControls,
+];
+
+const storySourceContextFields = [
+  ...storyBusinessIdentifiers,
+  ...demoStory.internalEvidenceFields,
+];
 
 const toolEndFields = [
   "output.artifact.title",
@@ -116,13 +180,50 @@ export type DemoBehaviorRule = {
   description: string;
   priority: number;
   trigger: string;
-  states: string[];
+  states: Array<string | { semantic_type: string; match?: Array<Record<string, unknown>> }>;
+  trigger_match?: Array<Record<string, unknown>>;
   time_window: number;
   verdict: number;
   approval_timeout?: number;
   reject_message: string;
   trust_impact: string;
   trust_threshold: number;
+};
+
+type DemoPolicyBuilderDecision = "ALLOW" | "REQUIRE_APPROVAL" | "BLOCK" | "HALT";
+type DemoPolicyBuilderOperator =
+  | "equals"
+  | "not_equals"
+  | "contains"
+  | "greater_than"
+  | "greater_than_or_equal"
+  | "less_than"
+  | "less_than_or_equal"
+  | "exists"
+  | "not_exists";
+type DemoPolicyBuilderValueType = "string" | "number" | "boolean";
+
+type DemoPolicyBuilderCondition = {
+  id: string;
+  field: string;
+  operator: DemoPolicyBuilderOperator;
+  transform: "value" | "count";
+  value: string;
+  valueType: DemoPolicyBuilderValueType;
+};
+
+export type DemoPolicyBuilderRule = {
+  id: string;
+  name: string;
+  decision: DemoPolicyBuilderDecision;
+  reason: string;
+  matchMode: "all" | "any";
+  conditions: DemoPolicyBuilderCondition[];
+};
+
+export type DemoPolicyBuilderConfig = {
+  version: 1;
+  rules: DemoPolicyBuilderRule[];
 };
 
 export const demoGuardrails: DemoGuardrail[] = [
@@ -151,19 +252,7 @@ export const demoGuardrails: DemoGuardrail[] = [
     guardrail_type: "4",
     processing_stage: "0",
     params: {
-      banned_words: [
-        "account identifier",
-        "customer contact",
-        "phone number",
-        "payment amount",
-        "acct_9281",
-        "acct_24819",
-        "acct_",
-        "$14,400",
-        "14,400",
-        "$12,400",
-        "12,400",
-      ],
+      banned_words: storyBusinessIdentifiers,
       max_l_dist: 1,
     },
     settings: toolGuardrailSettings(toolRequestFields, 0),
@@ -188,48 +277,24 @@ export const demoGuardrails: DemoGuardrail[] = [
     trust_impact: "low",
   },
   {
-    name: `${DEMO_PREFIX}banlist-input-data-egress-block`,
-    description: "Block restricted egress phrases before governed business execution.",
+    name: `${DEMO_PREFIX}restricted-egress-input-control`,
+    description: "Block story-specific export requests that move internal evidence to unapproved destinations.",
     guardrail_type: "4",
     processing_stage: "0",
     params: {
-      banned_words: [
-        "personal gmail",
-        "production admin token",
-        "admin token",
-        "session export",
-        "control export",
-        "unapproved spreadsheet",
-      ],
+      banned_words: storyRestrictedEgressPhrases,
       max_l_dist: 1,
     },
     settings: toolGuardrailSettings(toolRequestFields, 1),
     trust_impact: "medium",
   },
   {
-    name: `${DEMO_PREFIX}banlist-output-source-context-redaction`,
-    description: "Keep source-context labels out of released output when a ban-list validator is active.",
+    name: `${DEMO_PREFIX}source-context-output-redaction`,
+    description: "Redact finance-exception source context from UI output while preserving the customer-safe story.",
     guardrail_type: "4",
     processing_stage: "1",
     params: {
-      banned_words: [
-        "account identifier",
-        "customer contact",
-        "phone number",
-        "payment amount",
-        "acct_9281",
-        "acct_24819",
-        "acct_",
-        "$14,400",
-        "14,400",
-        "$12,400",
-        "12,400",
-        "agent_id",
-        "session_id",
-        "workflow_id",
-        "policy_id",
-        "source_id",
-      ],
+      banned_words: storySourceContextFields,
       max_l_dist: 1,
     },
     settings: toolGuardrailSettings(toolEndStringFields, 0),
@@ -267,86 +332,188 @@ export const obsoleteDemoGuardrailNames = [
   `${DEMO_PREFIX}restricted-manual-submission-block`,
   `${DEMO_PREFIX}regex-input-restricted-export-block`,
   `${DEMO_PREFIX}regex-output-sensitive-source-redaction`,
+  `${DEMO_PREFIX}banlist-input-data-egress-block`,
+  `${DEMO_PREFIX}banlist-output-source-context-redaction`,
+];
+
+export const obsoleteDemoBehaviorRuleNames = [
+  `${DEMO_PREFIX}llm-tool-call-governance-observed`,
+  `${DEMO_PREFIX}llm-completion-final-output-governance`,
+  `${DEMO_PREFIX}http-post-egress-approval`,
+  `${DEMO_PREFIX}database-write-block`,
+  `${DEMO_PREFIX}file-export-halt`,
+  `${DEMO_PREFIX}internal-runtime-observed`,
+  `${DEMO_PREFIX}final-output-requires-tool-result`,
 ];
 
 export const demoBehaviorRules: DemoBehaviorRule[] = [
   {
     rule_name: DEMO_BEHAVIOR_RULE_NAME,
     description:
-      "Observe CopilotKit tool calls so behavior governance is present and auditable for the OpenBox demo.",
-    priority: 50,
-    trigger: "llm_tool_call",
-    states: ["llm_tool_call"],
-    time_window: 300,
-    verdict: 0,
-    reject_message: "OpenBox observed this CopilotKit tool call under the demo behavior rule.",
-    trust_impact: "low",
-    trust_threshold: 10,
-  },
-  {
-    rule_name: `${DEMO_PREFIX}llm-completion-final-output-governance`,
-    description: "Require final model output to stay under OpenBox runtime output governance.",
-    priority: 60,
-    trigger: "llm_completion",
-    states: ["llm_completion"],
-    time_window: 300,
-    verdict: 1,
-    reject_message: "OpenBox constrained final model output before release.",
-    trust_impact: "medium",
-    trust_threshold: 25,
-  },
-  {
-    rule_name: `${DEMO_PREFIX}http-post-egress-approval`,
-    description: "Require approval before HTTP POST egress to external business systems.",
-    priority: 70,
+      "Require evidence lookup before outbound API submission so a CopilotKit agent cannot post externally without first reading governed source data.",
+    priority: 90,
     trigger: "http_post",
-    states: ["http_post"],
+    states: ["database_select"],
     time_window: 300,
     verdict: 2,
     approval_timeout: 300,
-    reject_message: "OpenBox requires approval before external POST egress.",
+    reject_message:
+      "External API POST paused: the agent must read governed database evidence before sending data outside the system.",
     trust_impact: "medium",
     trust_threshold: 30,
   },
   {
-    rule_name: `${DEMO_PREFIX}database-write-block`,
-    description: "Block direct database write semantics in this governed demo agent.",
+    rule_name: `${DEMO_PREFIX}file-export-requires-file-read`,
+    description:
+      "Require source-file review before writing or exporting a file so generated files cannot be created from unsupported memory.",
     priority: 80,
-    trigger: "database_update",
-    states: ["database_update"],
-    time_window: 300,
-    verdict: 3,
-    reject_message: "OpenBox blocks database write operations for this demo agent.",
-    trust_impact: "high",
-    trust_threshold: 50,
-  },
-  {
-    rule_name: `${DEMO_PREFIX}file-export-halt`,
-    description: "Halt file-export semantics that could persist restricted OpenBox evidence outside approved systems.",
-    priority: 90,
     trigger: "file_write",
-    states: ["file_write"],
+    states: ["file_read"],
     time_window: 300,
     verdict: 4,
-    reject_message: "OpenBox halted this file export path.",
+    reject_message:
+      "File export halted: the agent must read source evidence before producing an exported artifact.",
     trust_impact: "high",
-    trust_threshold: 60,
-  },
-  {
-    rule_name: `${DEMO_PREFIX}internal-runtime-observed`,
-    description: "Observe internal runtime operations for audit continuity.",
-    priority: 40,
-    trigger: "internal",
-    states: ["internal"],
-    time_window: 300,
-    verdict: 0,
-    reject_message: "OpenBox observed this internal runtime operation.",
-    trust_impact: "low",
-    trust_threshold: 5,
+    trust_threshold: 50,
   },
 ];
 
 export const demoBehaviorStates = demoBehaviorRules.map((rule) => rule.trigger);
+
+function policyRule(
+  id: string,
+  name: string,
+  decision: DemoPolicyBuilderDecision,
+  reason: string,
+  conditions: Array<Omit<DemoPolicyBuilderCondition, "id">>,
+): DemoPolicyBuilderRule {
+  return {
+    id,
+    name,
+    decision,
+    reason,
+    matchMode: "all",
+    conditions: conditions.map((condition, index) => ({
+      id: `${id}-condition-${index + 1}`,
+      ...condition,
+    })),
+  };
+}
+
+function startedActivityCondition(): Omit<DemoPolicyBuilderCondition, "id"> {
+  return {
+    field: "event_type",
+    operator: "equals",
+    transform: "value",
+    value: "ActivityStarted",
+    valueType: "string",
+  };
+}
+
+function governedActionCondition(action: string): Omit<DemoPolicyBuilderCondition, "id"> {
+  return {
+    field: "activity_input[_].args.action",
+    operator: "equals",
+    transform: "value",
+    value: action,
+    valueType: "string",
+  };
+}
+
+function governedFieldCondition(
+  field: string,
+  value: string,
+  operator: DemoPolicyBuilderOperator = "equals",
+): Omit<DemoPolicyBuilderCondition, "id"> {
+  return {
+    field: `activity_input[_].args.${field}`,
+    operator,
+    transform: "value",
+    value,
+    valueType: "string",
+  };
+}
+
+export const demoPolicyBuilderConfig: DemoPolicyBuilderConfig = {
+  version: 1,
+  rules: [
+    policyRule(
+      `${DEMO_PREFIX}policy-rule-block-identifier-export`,
+      "Block personal export of governance identifiers",
+      "BLOCK",
+      "OpenBox blocked goal drift from governed work into an unrelated personal internal-identifier export.",
+      [
+        startedActivityCondition(),
+        governedActionCondition("export_governance_identifiers"),
+      ],
+    ),
+    policyRule(
+      `${DEMO_PREFIX}policy-rule-require-credit-approval`,
+      "Require approval for large credit memo",
+      "REQUIRE_APPROVAL",
+      "OpenBox requires explicit human approval before issuing this credit memo or refund.",
+      [
+        startedActivityCondition(),
+        governedActionCondition("issue_large_refund"),
+      ],
+    ),
+    policyRule(
+      `${DEMO_PREFIX}policy-rule-halt-payment-control-change`,
+      "Halt production payment control changes",
+      "HALT",
+      "OpenBox halted this payment-control change because vendor bank-account changes and payment batch release are critical production actions.",
+      [
+        startedActivityCondition(),
+        governedActionCondition("disable_production_payments"),
+      ],
+    ),
+    policyRule(
+      `${DEMO_PREFIX}policy-rule-block-sensitive-handoff`,
+      "Block sensitive external data handoff",
+      "BLOCK",
+      "OpenBox blocked this external handoff because it includes direct OpenBox identifiers for an external destination.",
+      [
+        startedActivityCondition(),
+        governedActionCondition("review_data_handoff"),
+        governedFieldCondition("choiceId", "sensitive"),
+      ],
+    ),
+    ...storyRestrictedEgressPhrases.map((phrase, index) =>
+      policyRule(
+        `${DEMO_PREFIX}policy-rule-block-manual-egress-${index + 1}`,
+        `Block restricted manual egress: ${phrase}`,
+        "BLOCK",
+        "OpenBox blocked this human-edited draft because it requests restricted data outside approved systems.",
+        [
+          startedActivityCondition(),
+          governedActionCondition("submit_manual_request"),
+          governedFieldCondition("manualInput", phrase, "contains"),
+        ],
+      ),
+    ),
+    policyRule(
+      `${DEMO_PREFIX}policy-rule-allow-minimized-handoff`,
+      "Allow minimized external evidence package",
+      "ALLOW",
+      "OpenBox allowed this minimized external evidence package.",
+      [
+        startedActivityCondition(),
+        governedActionCondition("review_data_handoff"),
+        governedFieldCondition("choiceId", "minimal"),
+      ],
+    ),
+    policyRule(
+      `${DEMO_PREFIX}policy-rule-allow-operations-review`,
+      "Allow governed operations queue review",
+      "ALLOW",
+      "OpenBox allowed this governed operations queue review.",
+      [
+        startedActivityCondition(),
+        governedActionCondition("open_operations_queue"),
+      ],
+    ),
+  ],
+};
 
 export const demoPolicyRules = `# ${DEMO_POLICY_MARKER}
 

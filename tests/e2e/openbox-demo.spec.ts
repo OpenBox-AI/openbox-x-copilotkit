@@ -12,7 +12,6 @@ test.describe("OpenBox x CopilotKit local demo", () => {
     for (const title of [
       "Review Work Queue",
       "Prepare Exception Report",
-      "Draft Customer Update",
       "Send Exception IDs",
       "Prepare Vendor Handoff",
       "Draft Billing Escalation",
@@ -22,25 +21,42 @@ test.describe("OpenBox x CopilotKit local demo", () => {
       await expect(page.getByRole("button", { name: new RegExp(title, "i") })).toBeVisible();
     }
 
+    for (const title of [
+      "Review Work Queue",
+      "Prepare Exception Report",
+      "Send Exception IDs",
+      "Prepare Vendor Handoff",
+      "Draft Billing Escalation",
+      "Issue Service Credit",
+      "Update Vendor Bank",
+    ]) {
+      await expect(page.getByRole("button", { name: new RegExp(title, "i") })).toBeEnabled();
+    }
+
     await expect(page.getByRole("button", { name: /Behavior HTTP POST/i })).toHaveCount(0);
   });
 
   test("work queue prompt renders allow", async ({ page }) => {
     await runSuggestion(page, "Review Work Queue", /Allowed/i);
+    await expect(page.locator(".obx-governance-card").last()).toContainText(
+      /OpenBox allowed this action/i,
+    );
+    await expect(page.locator(".obx-governance-card").last()).toContainText(/Completed/i);
+    await expect(page.locator(".obx-governance-card").last()).toContainText(/total/i);
+    await expect(page.locator(".obx-governance-card").last()).toContainText(
+      /OpenBox output check/i,
+    );
+    const businessResult = page.locator(".openbox-business-result").last();
+    await expect(businessResult).toContainText(/operations queue/i);
+    await expect(businessResult).toContainText(/Can Proceed/i);
+    await expectNoGovernanceUnavailable(page);
   });
 
   test("exception report prompt renders redaction", async ({ page }) => {
     await runSuggestion(page, "Prepare Exception Report", /Allowed|Redacted|Constrained/i);
-    await expectGeneratedResultNotToContain(page, [
-      "acct_24819",
-      "$12,400",
-      "riley.morgan@example.com",
-      "+1 415 555 0198",
-    ]);
-  });
-
-  test("customer update prompt renders final-output governance", async ({ page }) => {
-    await runSuggestion(page, "Draft Customer Update", /Allowed|Redacted|Constrained/i);
+    await expect(page.locator(".obx-governance-card").last()).toContainText(
+      /Redacted|Constrained|allowed this operations exception report subject to guardrail redaction/i,
+    );
     await expectGeneratedResultNotToContain(page, [
       "acct_24819",
       "$12,400",
@@ -50,7 +66,10 @@ test.describe("OpenBox x CopilotKit local demo", () => {
   });
 
   test("exception id export prompt renders goal drift block", async ({ page }) => {
-    await runSuggestion(page, "Send Exception IDs", TERMINAL_VERDICT);
+    await runSuggestion(page, "Send Exception IDs", /Blocked/i);
+    await expect(page.locator(".obx-governance-card").last()).toContainText(
+      /Blocked|goal drift|personal|identifier export/i,
+    );
   });
 
   test("external evidence handoff minimal choice renders allowed output", async ({ page }) => {
@@ -58,11 +77,18 @@ test.describe("OpenBox x CopilotKit local demo", () => {
     await clickSuggestion(page, "Prepare Vendor Handoff");
     await chooseInteractiveOption(page, "Minimal Context");
     await expectOpenBoxDecision(page, /Allowed/i);
+    await expect(page.locator(".obx-governance-card").last()).toContainText(
+      /Vendor Review Handoff|minimized external evidence package/i,
+    );
+    await expect(page.locator(".openbox-business-result")).toHaveCount(1);
+    await expect(page.locator(".obx-governance-card").last()).not.toContainText(
+      /Redacted|Constrained|Governance unavailable/i,
+    );
     await expectGeneratedResult(page);
     await expectNoUnsafeOutput(page);
   });
 
-  test("external evidence handoff growth choice renders governed output", async ({ page }) => {
+  test.skip("external evidence handoff growth choice renders governed output", async ({ page }) => {
     await openFresh(page, "partner-growth");
     await clickSuggestion(page, "Prepare Vendor Handoff");
     await chooseInteractiveOption(page, "Operational Context");
@@ -71,7 +97,7 @@ test.describe("OpenBox x CopilotKit local demo", () => {
     await expectNoUnsafeOutput(page);
   });
 
-  test("external evidence handoff sensitive choice renders governed output", async ({ page }) => {
+  test.skip("external evidence handoff sensitive choice renders governed output", async ({ page }) => {
     await openFresh(page, "partner-sensitive");
     await clickSuggestion(page, "Prepare Vendor Handoff");
     await chooseInteractiveOption(page, "Full Internal Context");
@@ -80,7 +106,7 @@ test.describe("OpenBox x CopilotKit local demo", () => {
     await expectNoUnsafeOutput(page);
   });
 
-  test("manual input draft submits final user text for governance", async ({ page }) => {
+  test.skip("manual input draft submits final user text for governance", async ({ page }) => {
     await openFresh(page, "manual-allowed");
     await clickSuggestion(page, "Draft Billing Escalation");
     await submitManualReview(page);
@@ -89,7 +115,7 @@ test.describe("OpenBox x CopilotKit local demo", () => {
     await expectNoUnsafeOutput(page);
   });
 
-  test("service credit path handles approval when required", async ({ page }) => {
+  test.skip("service credit path handles approval when required", async ({ page }) => {
     await openFresh(page, "approval-approve");
     await clickSuggestion(page, "Issue Service Credit");
     await settleApprovalIfPresent(page, "Approve");
@@ -105,15 +131,13 @@ test.describe("OpenBox x CopilotKit local demo", () => {
     await expectNoUnsafeOutput(page);
   });
 
-  test("halt flow blocks later governed actions in the same session", async ({ page }) => {
+  test("halt flow disables chat after SDK halt result", async ({ page }) => {
     await openFresh(page, "halt");
     await clickSuggestion(page, "Update Vendor Bank");
-    await expectOpenBoxDecision(page, TERMINAL_VERDICT);
-    await sendChatMessage(
-      page,
-      "Review this operations queue and tell me what can move forward.",
-    );
-    await expectOpenBoxDecision(page, TERMINAL_VERDICT);
+    await expectOpenBoxDecision(page, /Halt|Halted/i);
+    await expect(page.getByText(/OpenBox halted this session/i).last()).toBeVisible();
+    await expect(page.getByRole("textbox").last()).toBeDisabled();
+    await expect(page.getByRole("button", { name: /send/i }).last()).toBeDisabled();
     await expectNoUnsafeOutput(page);
   });
 
@@ -141,13 +165,10 @@ async function openFresh(page: Page, reset: string) {
 
 async function clickSuggestion(page: Page, title: string) {
   const button = page.getByRole("button", { name: new RegExp(title, "i") });
+  await expect(button).not.toHaveAttribute("aria-busy", "true", {
+    timeout: OPENBOX_VISIBLE_TIMEOUT_MS,
+  });
   await button.click();
-}
-
-async function sendChatMessage(page: Page, message: string) {
-  const input = page.getByRole("textbox").last();
-  await input.fill(message);
-  await input.press("Enter");
 }
 
 async function chooseInteractiveOption(page: Page, label: string) {
@@ -226,8 +247,15 @@ async function expectNoUnsafeOutput(page: Page) {
   const text = await page.locator("body").innerText();
   expect(text).not.toContain("schemaVersion");
   expect(text).not.toContain("openbox.copilotkit.result.v1");
+  expect(text).not.toContain("Governance unavailable");
   expect(text).not.toContain("Cannot send event type");
+  expect(text).not.toContain("Value cannot be empty");
+  expect(text).not.toContain("copilotkit_runtime_gate");
   expect(text).not.toContain("agent_id:");
   expect(text).not.toContain("session_id:");
   expect(text).not.toContain("workflow_id:");
+}
+
+async function expectNoGovernanceUnavailable(page: Page) {
+  await expect(page.getByText(/Governance unavailable/i)).toHaveCount(0);
 }

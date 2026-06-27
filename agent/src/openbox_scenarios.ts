@@ -16,6 +16,8 @@ const GOVERNED_ACTIONS = [
   "submit_manual_request",
   "view_governance_report",
   "draft_policy_constrained_message",
+  "read_vault_secret",
+  "check_access_grant",
 ] as const;
 const DIRECT_GOVERNED_ACTIONS = [
   "open_operations_queue",
@@ -27,14 +29,12 @@ const DIRECT_GOVERNED_ACTIONS = [
   "submit_manual_request",
   "view_governance_report",
   "draft_policy_constrained_message",
+  "read_vault_secret",
+  "check_access_grant",
 ] as const;
 const APPROVAL_GOVERNED_ACTIONS = ["issue_large_refund"] as const;
 const HANDOFF_CHOICES = ["minimal", "growth", "sensitive"] as const;
 const SENSITIVITY_VALUES = ["public", "internal", "confidential", "restricted"] as const;
-
-const GovernedActionSchema = z.enum(GOVERNED_ACTIONS);
-const DirectGovernedActionSchema = z.enum(DIRECT_GOVERNED_ACTIONS);
-const ApprovalGovernedActionSchema = z.enum(APPROVAL_GOVERNED_ACTIONS);
 
 const nullableString = (description: string) =>
   z.union([z.string(), z.null()]).optional().describe(description);
@@ -51,7 +51,7 @@ const nullableHandoffChoice = (description: string) =>
 
 export const openbox_governed_action = tool(
   async (input: {
-    action: z.infer<typeof DirectGovernedActionSchema>;
+    action: (typeof DIRECT_GOVERNED_ACTIONS)[number];
     request?: string | null;
     destination?: string | null;
     amountUsd?: number | null;
@@ -102,7 +102,7 @@ export const openbox_governed_action = tool(
 
 export const openbox_governed_approval_action = tool(
   async (input: {
-    action: z.infer<typeof ApprovalGovernedActionSchema>;
+    action: (typeof APPROVAL_GOVERNED_ACTIONS)[number];
     request?: string | null;
     destination?: string | null;
     amountUsd?: number | null;
@@ -145,7 +145,7 @@ export const openbox_resume_governed_action = tool(
     approvalId?: string | null;
     governanceEventId?: string | null;
     approved?: boolean | null;
-    action: z.infer<typeof GovernedActionSchema>;
+    action: (typeof GOVERNED_ACTIONS)[number];
     request: string;
     destination?: string | null;
     amountUsd?: number | null;
@@ -196,7 +196,7 @@ async function timeTool<T>(name: string, fn: () => Promise<T>): Promise<T> {
   }
 }
 
-function requireRequest<T extends { action: z.infer<typeof GovernedActionSchema>; request?: string }>(
+function requireRequest<T extends { action: (typeof GOVERNED_ACTIONS)[number]; request?: string }>(
   input: T,
 ): T & { request: string } {
   const request = input.request?.trim();

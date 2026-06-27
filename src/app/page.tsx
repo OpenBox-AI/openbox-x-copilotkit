@@ -24,34 +24,17 @@ import {
   type CopilotChatSuggestionViewProps,
   useCopilotKit,
 } from "@copilotkit/react-core/v2";
+import { isOpenBoxCopilotResultMessage } from "@openbox-ai/openbox-sdk/copilotkit/react";
 import type { Suggestion } from "@copilotkit/core";
-import { OpenBoxGovernanceDecision } from "@openbox-ai/openbox-sdk/copilotkit/react";
-import { openBoxDemoScenarios } from "@/lib/openbox-demo-scenarios";
 import {
   OpenBoxLiveTimingProvider,
-  timingsFromLiveTiming,
   useOpenBoxLiveTimingValue,
-  type OpenBoxLiveTiming,
 } from "@/lib/openbox-live-timing";
 
 type IndexedSuggestion = {
   suggestion: Suggestion;
   index: number;
 };
-
-const openBoxTheme = {
-  logoSrc: withBasePath("/openbox-mark.png"),
-  accentColor: "#3B9AF5",
-  radius: 8,
-  density: "comfortable" as const,
-  mode: "auto" as const,
-};
-
-const openBoxToolNames = new Set([
-  "openbox_governed_action",
-  "openbox_governed_approval_action",
-  "openbox_resume_governed_action",
-]);
 
 const hasSuggestionClass = (suggestion: Suggestion, className: string) =>
   suggestion.className?.split(/\s+/).includes(className) ?? false;
@@ -144,7 +127,7 @@ function OpenBoxMessageView(
 function OpenBoxMessageViewContent(
   { className, cursor, isRunning = false, messages = [], ...props }: CopilotChatMessageViewProps,
 ) {
-  const liveTiming = useOpenBoxLiveTimingValue();
+  useOpenBoxLiveTimingValue();
 
   return (
     <CopilotChatMessageView
@@ -157,8 +140,6 @@ function OpenBoxMessageViewContent(
         const lastMessage = slotMessages[slotMessages.length - 1];
         const showCursor =
           slotIsRunning && recordValue(lastMessage).role !== "reasoning";
-        const showRuntimeReview =
-          slotIsRunning && !hasOpenBoxToolState(slotMessages);
 
         return (
           <div
@@ -166,8 +147,10 @@ function OpenBoxMessageViewContent(
             data-testid="copilot-message-list"
             className={`copilotKitMessages cpk:flex cpk:flex-col ${className ?? ""}`}
           >
-            {messageElements}
-            {showRuntimeReview ? <OpenBoxRuntimeReview liveTiming={liveTiming} /> : null}
+            {messageElements.filter(
+              (_element, index) =>
+                !isOpenBoxCopilotResultMessage(slotMessages[index]),
+            )}
             {interruptElement}
             {showCursor ? (
               <div className="cpk:mt-2">
@@ -183,64 +166,10 @@ function OpenBoxMessageViewContent(
 
 OpenBoxMessageView.Cursor = CopilotChatMessageView.Cursor;
 
-function OpenBoxRuntimeReview({
-  liveTiming,
-}: {
-  liveTiming: OpenBoxLiveTiming | null;
-}) {
-  return (
-    <OpenBoxGovernanceDecision
-      status="inProgress"
-      parameters={{
-        action: liveTiming?.action ?? "copilotkit_runtime_gate",
-        request:
-          liveTiming?.request ??
-          "OpenBox is reviewing this request before the assistant continues.",
-        timings: liveTiming ? timingsFromLiveTiming(liveTiming) : undefined,
-      }}
-      theme={openBoxTheme}
-      scenarios={openBoxDemoScenarios as any}
-    />
-  );
-}
-
 function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function hasOpenBoxToolState(messages: unknown[]) {
-  return messages.some((message) => {
-    const record = recordValue(message);
-    const name = stringValue(record.name);
-    if (openBoxToolNames.has(name)) return true;
-
-    const content = stringValue(record.content);
-    if (content.includes("openbox.copilotkit.result.v1")) return true;
-
-    return toolCallsFromMessage(record).some((toolCall) =>
-      openBoxToolNames.has(toolCallName(toolCall)),
-    );
-  });
-}
-
-function toolCallsFromMessage(message: Record<string, unknown>): unknown[] {
-  if (Array.isArray(message.toolCalls)) return message.toolCalls;
-  if (Array.isArray(message.tool_calls)) return message.tool_calls;
-  const additionalKwargs = recordValue(message.additional_kwargs);
-  if (Array.isArray(additionalKwargs.tool_calls)) return additionalKwargs.tool_calls;
-  return [];
-}
-
-function toolCallName(toolCall: unknown): string {
-  const record = recordValue(toolCall);
-  const fn = recordValue(record.function);
-  return stringValue(record.name ?? fn.name);
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value : "";
 }
 
 const OpenBoxSuggestionView = forwardRef<
@@ -294,7 +223,7 @@ const OpenBoxSuggestionView = forwardRef<
               index={index}
               isLoading={!isRuntimeReady || loadingSet.has(index) || suggestion.isLoading}
               onSelectSuggestion={isRuntimeReady ? selectSuggestion : undefined}
-              className="openbox-governed-suggestion openbox-workflow-suggestion"
+              className={suggestion.className}
             />
           ))}
         </div>
@@ -383,7 +312,9 @@ function SuggestionButton({
       className={className ?? suggestion.className}
       isLoading={isLoading}
       type="button"
-      onClick={() => onSelectSuggestion?.(suggestion, index)}
+      onClick={() => {
+        onSelectSuggestion?.(suggestion, index);
+      }}
     >
       {suggestion.title}
     </CopilotChatSuggestionPill>
@@ -398,14 +329,14 @@ function OpenBoxHaltedOverlay() {
 
   return (
     <div className="pointer-events-none absolute inset-x-4 bottom-24 z-30 flex justify-center">
-      <div className="pointer-events-auto w-full max-w-md rounded-md border border-orange-500/30 bg-[var(--background)]/95 px-4 py-3 text-sm text-orange-700 shadow-lg shadow-black/15 backdrop-blur">
+      <div className="pointer-events-auto w-full max-w-md rounded-md border border-red-500/40 bg-[var(--background)]/95 px-4 py-3 text-sm text-red-700 shadow-lg shadow-black/15 backdrop-blur">
         <div className="font-medium">OpenBox halted this session.</div>
-        <div className="mt-1 text-orange-700">
+        <div className="mt-1 text-red-700">
           Start a new chat or reset before sending another governed request.
         </div>
         <button
           type="button"
-          className="mt-3 rounded-md border border-orange-500/30 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-500/10"
+          className="mt-3 rounded-md border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-500/10"
           onClick={reset}
         >
           Reset demo

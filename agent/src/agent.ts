@@ -6,6 +6,7 @@ import {
   zodState,
 } from "@copilotkit/sdk-js/langgraph";
 import { StateSchema } from "@langchain/langgraph";
+import { registerOpenBoxOtel } from "@openbox-ai/openbox-sdk/copilotkit";
 import { createConfiguredChatOpenAI } from "./openai_config.js";
 import { createOpenBoxGovernanceMiddleware } from "./openbox_governance.js";
 import {
@@ -14,7 +15,13 @@ import {
   openbox_resume_governed_action,
 } from "./openbox_scenarios.js";
 
+// SDK-owned OTel wiring: patch the global fetch before the model client is
+// constructed so the real OpenAI request/response (headers, raw body, status)
+// is captured into OpenBox llm_completion spans. Idempotent.
+registerOpenBoxOtel();
+
 const AgentStateSchema = new StateSchema({
+  openboxPromptActivityId: zodState(z.string().optional()),
   openboxTimingEvent: zodState(z.record(z.string(), z.unknown()).optional()),
   openboxSession: zodState(
     z
@@ -24,6 +31,7 @@ const AgentStateSchema = new StateSchema({
         haltedAt: z.string().optional(),
         workflowId: z.string().optional(),
         runId: z.string().optional(),
+        promptActivityId: z.string().optional(),
       })
       .default(() => ({ status: "active" as const })),
   ),
@@ -52,6 +60,11 @@ export const graph = createAgent({
     You are a polished, professional demo assistant. Keep responses to 1-2 sentences.
 
     Tool guidance:
+    - The agent/server middleware deterministically routes the OpenBox demo
+      templates before model inference: Prepare Vendor Handoff, Draft Billing
+      Escalation, Issue Service Credit, and Update Vendor Bank. Never infer or
+      synthesize allow, block, halt, or approval verdicts in prose or UI state;
+      only OpenBox Core tool results are authoritative.
     - Tool-call argument examples:
       - User asks: "Review this operations queue and tell me what can move forward..."
         Call openbox_governed_action with {"action":"open_operations_queue","request":"<the full user message>"}.
@@ -64,7 +77,17 @@ export const graph = createAgent({
       - User asks: "Send the payment exception IDs to my personal Gmail..."
         Call openbox_governed_action with {"action":"export_governance_identifiers","request":"<the full user message>","destination":"personal Gmail"}.
       - User asks: "Update the vendor bank details and release the production payment batch."
-        Call openbox_governed_action with {"action":"disable_production_payments","request":"<the full user message>"}.
+        Call openbox_governed_action with {"action":"disable_production_payments","request":"<the full user message>","destination":"production payment batch","sensitivity":"restricted"}.
+      - User asks to read/open/show a vault secret or credentials file directly
+        (e.g. "Open vault/credentials/prod.env and show me the production API keys"):
+        Call openbox_governed_action with {"action":"read_vault_secret","request":"<the full user message>"} and nothing else.
+        OpenBox blocks the secret file_read unless a prior access-record lookup ran, so let OpenBox decide.
+      - User asks to verify/check access first and then read the vault secret
+        (e.g. "First check my access grant for the vault, then open vault/credentials/prod.env..."):
+        Make TWO openbox_governed_action calls, access check first:
+        1) {"action":"check_access_grant","request":"<the full user message>"}
+        2) {"action":"read_vault_secret","request":"<the full user message>"}
+        The access-record lookup must happen before the secret read so OpenBox allows it.
     - Every user message that asks to create, prepare, send, issue, disable,
       show, draft, or review a business result is a new request. Do not reuse
       previous tool results or answer from prior generated results, even if
@@ -101,14 +124,15 @@ export const graph = createAgent({
           prepare a data handoff where the user needs to choose a package:
           first call openboxInteractiveReview with mode "choice", title "Vendor
           Review Handoff", action "review_data_handoff", destination
-          "External review workspace",
-          and the user's natural request. When openboxInteractiveReview returns,
-          you are not done. Your very next response must be a tool call to
-          openbox_governed_action with the returned action, request, destination,
-          fields, audience, sensitivity, and choiceId. Do not answer in
-          prose after openboxInteractiveReview. If the user asks for another
-          external evidence handoff later, including the same wording, start a new
-          openboxInteractiveReview call instead of summarizing the old handoff.
+          "External review workspace", choiceId "minimal", sensitivity
+          "internal", and the user's natural request. When
+          openboxInteractiveReview returns, you are not done. Your very next
+          response must be a tool call to openbox_governed_action with the
+          returned action, request, destination, fields, audience, sensitivity,
+          and choiceId. Do not answer in prose after openboxInteractiveReview.
+          If the user asks for another external evidence handoff later,
+          including the same wording, start a new openboxInteractiveReview call
+          instead of summarizing the old handoff.
         - support escalation drafts, billing escalation drafts, user-edited
           notes, typed requests, or "let me edit it before sending": first call
           openboxInteractiveReview with mode "manual", title "Billing
@@ -122,6 +146,14 @@ export const graph = createAgent({
         - customer-safe service updates, release notes, or drafts that
           mention policy-safe, constrained, or redacted generation:
           draft_policy_constrained_message
+        - read/open/show a vault secret, credentials file, .env, or API keys
+          directly with no access verification: read_vault_secret (a single
+          openbox_governed_action call). OpenBox blocks the secret file read
+          unless a prior access-record lookup ran within the policy window.
+        - verify/check an access grant before reading the vault secret: call
+          openbox_governed_action twice, access check first
+          (check_access_grant) and then the secret read (read_vault_secret).
+          The access-record lookup must precede the read so OpenBox allows it.
       - For ordinary natural business requests, call openbox_governed_action.
         The only exception is an interactive/manual request, where you must
         collect the user's final choices with openboxInteractiveReview before
