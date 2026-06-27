@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   useHumanInTheLoop,
   useDefaultRenderTool,
+  useInterrupt,
 } from "@copilotkit/react-core/v2";
 import {
   createOpenBoxApprovalClient,
@@ -31,6 +32,9 @@ export const useGenerativeUIExamples = () => {
     bindings: {
       useHumanInTheLoop: useHumanInTheLoop as any,
       useDefaultRenderTool: useDefaultRenderTool as any,
+      // Deterministic governance approval renders via a langgraph interrupt
+      // (on_interrupt), not a model-emitted tool call.
+      useInterrupt: useInterrupt as any,
     },
     approvalParameters: z.object({
       action: z.string().describe("The sensitive action being reviewed."),

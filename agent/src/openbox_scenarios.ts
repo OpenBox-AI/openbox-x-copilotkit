@@ -1,9 +1,106 @@
 import { z } from "zod";
 import { tool } from "@langchain/core/tools";
+import { interrupt } from "@langchain/langgraph";
 import {
   governAction,
   resumeGovernedAction,
 } from "./openbox_action_governance.js";
+
+// Deterministic, host-driven Human-In-The-Loop. When OpenBox Core returns
+// approval_required, we pause the graph with langgraph interrupt() (NOT a
+// model-emitted tool call) so the approval card ALWAYS renders, then resume the
+// governed action with the human decision. The frontend renders this via
+// useInterrupt (on_interrupt event), keyed on action === 'openboxApprovalReview'.
+//
+// IMPORTANT: langgraph interrupt() re-runs this node from the top on resume.
+// Re-running governAction would create a DUPLICATE governance workflow that
+// supersedes the one the human actually decided on, deactivating it ("Session
+// is no longer active"). So we cache the first governance result per thread and
+// reuse it on resume — the standard interrupt idempotency guard — so
+// governAction runs exactly once and the resume polls the decided workflow.
+const pendingGovernance = new Map<string, Record<string, unknown>>();
+
+function governanceCacheKey(config: unknown, request: Record<string, unknown>): string {
+  const c = config as { configurable?: Record<string, unknown> } | undefined;
+  const threadId =
+    (c?.configurable?.thread_id as string | undefined) ??
+    (c?.configurable?.threadId as string | undefined) ??
+    "default";
+  // Include the request text, not just the action: on an interrupt resume the
+  // node re-runs with the IDENTICAL request (cache hit, by design), but a NEW
+  // request for the same action on the same (now-pinned) thread must MISS so an
+  // abandoned approval's stale result is never reused.
+  return `${threadId}:${String(request.action ?? "")}:${String(request.request ?? "")}`;
+}
+
+function isApprovalRequired(result: unknown): result is Record<string, unknown> {
+  if (!result || typeof result !== "object") return false;
+  const r = result as Record<string, unknown>;
+  return r.status === "approval_required" || r.verdict === "require_approval";
+}
+
+function approvalCardArgs(result: Record<string, unknown>): Record<string, unknown> {
+  const pick = (k: string) =>
+    typeof result[k] === "string" || typeof result[k] === "number"
+      ? result[k]
+      : undefined;
+  return Object.fromEntries(
+    Object.entries({
+      action: pick("action"),
+      request: pick("request"),
+      destination: pick("destination"),
+      amountUsd: typeof result.amountUsd === "number" ? result.amountUsd : undefined,
+      riskReason: pick("reason") ?? pick("message"),
+      workflowId: pick("workflowId"),
+      runId: pick("runId"),
+      activityId: pick("activityId"),
+      approvalId: pick("approvalId"),
+      governanceEventId: pick("governanceEventId"),
+      expiresAt: pick("expiresAt"),
+    }).filter(([, v]) => v !== undefined),
+  );
+}
+
+async function governWithApprovalGate(
+  request: Record<string, unknown>,
+  config: unknown,
+): Promise<unknown> {
+  const cacheKey = governanceCacheKey(config, request);
+  // On the first pass this is empty and we govern; on the interrupt resume the
+  // node re-runs and we reuse the cached result instead of re-governing.
+  const result =
+    pendingGovernance.get(cacheKey) ??
+    ((await governAction(request as any, config as any)) as Record<string, unknown>);
+  if (!isApprovalRequired(result)) {
+    pendingGovernance.delete(cacheKey);
+    return result;
+  }
+  // Remember the decided-upon workflow so the post-interrupt re-run skips
+  // governAction (it would otherwise create a duplicate, superseding workflow).
+  pendingGovernance.set(cacheKey, result);
+  // Pause here. The frontend's useInterrupt renders the approval card; resolve()
+  // sends the decision back as the resume value.
+  const decision = interrupt({
+    __copilotkit_interrupt_value__: {
+      action: "openboxApprovalReview",
+      args: approvalCardArgs(result),
+    },
+  });
+  pendingGovernance.delete(cacheKey);
+  const parsed =
+    typeof decision === "string"
+      ? (() => {
+          try {
+            return JSON.parse(decision);
+          } catch {
+            return { approved: false };
+          }
+        })()
+      : (decision as Record<string, unknown>);
+  // Resume the governed action with the human's IDs+decision (carries the
+  // original governanceEventId the human decided on).
+  return await resumeGovernedAction({ ...(result as any), ...parsed } as any, config as any);
+}
 
 const GOVERNED_ACTIONS = [
   "open_operations_queue",
@@ -63,7 +160,7 @@ export const openbox_governed_action = tool(
   }, config) => {
     const request = requireRequest(dropNullValues(input));
     return timeTool("openbox_governed_action", async () => {
-      return JSON.stringify(await governAction(request, config));
+      return JSON.stringify(await governWithApprovalGate(request, config));
     });
   },
   {
@@ -107,9 +204,19 @@ export const openbox_governed_approval_action = tool(
     destination?: string | null;
     amountUsd?: number | null;
   }, config) => {
-    const request = requireRequest(dropNullValues(input));
+    const base = requireRequest(dropNullValues(input));
+    // This tool governs money movement (refunds/credits) — restricted financial
+    // data. Declare the action's data sensitivity so OpenBox Core's "require
+    // approval for restricted data" policy (which matches on
+    // activity_input[_].args.sensitivity) gates it. We only declare the data
+    // class; Core still owns the verdict (allow/require_approval/block/halt).
+    const request = {
+      ...base,
+      sensitivity:
+        (base as { sensitivity?: string }).sensitivity ?? "restricted",
+    };
     return timeTool("openbox_governed_approval_action", async () => {
-      return JSON.stringify(await governAction(request, config));
+      return JSON.stringify(await governWithApprovalGate(request, config));
     });
   },
   {
@@ -119,7 +226,9 @@ export const openbox_governed_approval_action = tool(
       "Always pass action, request, and amountUsd when money movement is requested. Never call this tool with empty arguments. " +
       "Example: {\"action\":\"issue_large_refund\",\"request\":\"Issue a $7,500 service credit to the approved account.\",\"amountUsd\":7500}. " +
       "Use issue_large_refund for refunds, credits, payouts, invoice write-offs, or other money movement. " +
-      "If this returns approval_required, call openboxApprovalReview, then openbox_resume_governed_action.",
+      "OpenBox transparently handles any required human approval (it pauses for the approval card and " +
+      "resumes itself) and returns the FINAL result. Call this tool exactly once and never call any " +
+      "approval or resume tool yourself.",
     schema: z.object({
       action: z.enum(APPROVAL_GOVERNED_ACTIONS).describe(
         "Required approval-gated OpenBox business action.",

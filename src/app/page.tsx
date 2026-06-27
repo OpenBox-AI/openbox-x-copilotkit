@@ -13,7 +13,9 @@ import { withBasePath } from "@/lib/base-path";
 import {
   clearOpenBoxHaltState,
   initializeOpenBoxHaltState,
+  markOpenBoxSessionHalted,
   onOpenBoxSessionHalted,
+  useIsOpenBoxHalted,
 } from "@/lib/openbox-halt-state";
 
 import {
@@ -24,7 +26,11 @@ import {
   type CopilotChatSuggestionViewProps,
   useCopilotKit,
 } from "@copilotkit/react-core/v2";
-import { isOpenBoxCopilotResultMessage } from "@openbox-ai/openbox-sdk/copilotkit/react";
+import {
+  isOpenBoxCopilotResultMessage,
+  OpenBoxGovernanceDecision,
+  type OpenBoxRendererTheme,
+} from "@openbox-ai/openbox-sdk/copilotkit/react";
 import type { Suggestion } from "@copilotkit/core";
 import {
   OpenBoxLiveTimingProvider,
@@ -147,10 +153,38 @@ function OpenBoxMessageViewContent(
             data-testid="copilot-message-list"
             className={`copilotKitMessages cpk:flex cpk:flex-col ${className ?? ""}`}
           >
-            {messageElements.filter(
-              (_element, index) =>
-                !isOpenBoxCopilotResultMessage(slotMessages[index]),
-            )}
+            {messageElements.map((element, index) => {
+              // A runtime/prompt gate halt or error (incl. HTTP 400/500/503 from
+              // Core) is returned by the SDK as an ASSISTANT message whose content
+              // is the OpenBox governance-result JSON string — not a tool result —
+              // so the governed-tool card renderer never sees it. Detect it here
+              // and render the clean governance card instead of dumping raw JSON.
+              const slotMessage = slotMessages[index];
+              // The governed TOOL result is ALREADY rendered by the SDK's
+              // useDefaultRenderTool (renderGovernedTool) as a full governance
+              // card + action artifact. Its `tool` message content also parses
+              // as an OpenBox result, so rendering a fallback card for it here
+              // would emit a SECOND, identical "Governance decision" card. Only
+              // the runtime/prompt-gate result arrives as an ASSISTANT message
+              // (never a tool result) — restrict the fallback to that case.
+              const slotRole = String(
+                recordValue(slotMessage).role ??
+                  recordValue(slotMessage).type ??
+                  "",
+              ).toLowerCase();
+              if (slotRole === "tool") return element;
+              const result = openBoxResultForMessage(slotMessage);
+              if (!result) return element;
+              return (
+                <OpenBoxGovernanceDecision
+                  key={openBoxCardKey(element, index)}
+                  result={result}
+                  status="complete"
+                  theme={OPENBOX_CARD_THEME}
+                  onSessionHalted={markOpenBoxSessionHalted}
+                />
+              );
+            })}
             {interruptElement}
             {showCursor ? (
               <div className="cpk:mt-2">
@@ -172,6 +206,128 @@ function recordValue(value: unknown): Record<string, unknown> {
     : {};
 }
 
+const OPENBOX_RESULT_SCHEMA_VERSION = "openbox.copilotkit.result.v1";
+
+// Themed to match the governance cards rendered in use-generative-ui-examples.tsx.
+const OPENBOX_CARD_THEME: OpenBoxRendererTheme = {
+  logoSrc: withBasePath("/openbox-mark.png"),
+  accentColor: "#3B9AF5",
+  radius: 8,
+  density: "comfortable",
+  mode: "auto",
+};
+
+function textOf(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+// Collect every string that could carry the governance-result JSON: the content
+// itself, common text fields, and array content parts (LangChain content blocks).
+function openBoxTextCandidates(message: unknown): string[] {
+  const record = recordValue(message);
+  const out: string[] = [];
+  const push = (value: unknown) => {
+    if (typeof value === "string") out.push(value);
+  };
+  push(record.content);
+  push(record.text);
+  push(record.value);
+  if (Array.isArray(record.content)) {
+    for (const part of record.content) {
+      const partRecord = recordValue(part);
+      push(part);
+      push(partRecord.text);
+      push(partRecord.content);
+      push(partRecord.value);
+    }
+  }
+  return out;
+}
+
+// Parse the governance-result object out of an assistant message's content.
+// Returns null when the content is not an OpenBox result.
+function extractOpenBoxResult(
+  message: unknown,
+): Record<string, unknown> | null {
+  for (const candidate of openBoxTextCandidates(message)) {
+    const trimmed = candidate.trim();
+    if (!trimmed.startsWith("{")) continue;
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      const record = recordValue(parsed);
+      if (record.schemaVersion === OPENBOX_RESULT_SCHEMA_VERSION) {
+        return record;
+      }
+    } catch {
+      // fall through to the defensive fallback below
+    }
+  }
+  return null;
+}
+
+// Defensive: an assistant message that LOOKS like a governance result (its text
+// names the schema) but parsed imperfectly must still never render as raw JSON.
+function looksLikeOpenBoxResultText(message: unknown): boolean {
+  return openBoxTextCandidates(message).some((text) =>
+    text.includes(OPENBOX_RESULT_SCHEMA_VERSION),
+  );
+}
+
+// Best-effort scrape of a human reason from raw text when JSON.parse failed.
+function scrapeOpenBoxField(message: unknown, field: string): string | undefined {
+  const pattern = new RegExp(`"${field}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`);
+  for (const text of openBoxTextCandidates(message)) {
+    const match = text.match(pattern);
+    if (match) {
+      try {
+        return JSON.parse(`"${match[1]}"`) as string;
+      } catch {
+        return match[1];
+      }
+    }
+  }
+  return undefined;
+}
+
+// Returns a governance-result object for any assistant message that carries one,
+// synthesizing a fail-closed "unavailable" result when the JSON is malformed.
+// The guarantee: a governance-result message is NEVER shown as raw text.
+function openBoxResultForMessage(
+  message: unknown,
+): Record<string, unknown> | null {
+  const parsed = extractOpenBoxResult(message);
+  if (parsed) return parsed;
+
+  if (
+    isOpenBoxCopilotResultMessage(message) ||
+    looksLikeOpenBoxResultText(message)
+  ) {
+    const haltScrape =
+      scrapeOpenBoxField(message, "status") === "halted" ||
+      scrapeOpenBoxField(message, "verdict") === "halt";
+    return {
+      schemaVersion: OPENBOX_RESULT_SCHEMA_VERSION,
+      status: haltScrape ? "halted" : "error",
+      verdict: haltScrape ? "halt" : "error",
+      action:
+        scrapeOpenBoxField(message, "action") ?? "copilotkit_runtime_gate",
+      reason:
+        scrapeOpenBoxField(message, "reason") ??
+        scrapeOpenBoxField(message, "message") ??
+        "OpenBox could not be reached. The governed action was stopped fail-closed.",
+    };
+  }
+
+  return null;
+}
+
+function openBoxCardKey(element: unknown, index: number): string {
+  const key = recordValue(element).key;
+  return typeof key === "string" || typeof key === "number"
+    ? `openbox-result-${key}`
+    : `openbox-result-${index}`;
+}
+
 const OpenBoxSuggestionView = forwardRef<
   HTMLDivElement,
   CopilotChatSuggestionViewProps
@@ -180,6 +336,10 @@ const OpenBoxSuggestionView = forwardRef<
   ref,
 ) {
   const isRuntimeReady = useCopilotRuntimeReady();
+  // A halted session is terminal — hide the chip templates so the user can't
+  // start another governed action (the message input is also disabled).
+  const isHalted = useIsOpenBoxHalted();
+  if (isHalted) return null;
   const loadingSet = new Set(loadingIndexes ?? []);
   const grouped = suggestions.reduce(
     (groups, suggestion, index) => {

@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { type SpanData, type WorkflowVerdict } from "@openbox-ai/openbox-sdk/core-client";
 import {
   createGovernedCopilotTool,
@@ -112,13 +112,10 @@ type GovernedActionArtifact =
       }>;
     }
   | {
-      type: "support_ticket";
-      ticketId: string;
+      type: "internal_note";
+      status: "logged";
       title: string;
-      urgencyLabel: "Low" | "Medium" | "High";
-      queue: string;
-      status: "created";
-      nextStep: string;
+      summary: string;
     }
   | {
       type: "status_update";
@@ -177,6 +174,31 @@ type GovernedActionArtifact =
         releasedAs: string;
       }>;
       redacted: boolean;
+    }
+  // Minimal one-line outcome artifacts for the governance-only actions. They
+  // exist so every governed action flows through the model (one llm_completion).
+  // The SDK marks blocked/halted runs with a result status other than
+  // executed/constrained, so the renderer suppresses their business card while
+  // the captured llm_completion span is still recorded on the activity.
+  | {
+      type: "vault_read";
+      status: "blocked";
+      summary: string;
+    }
+  | {
+      type: "access_check";
+      status: "verified";
+      summary: string;
+    }
+  | {
+      type: "payments_disable";
+      status: "halted";
+      summary: string;
+    }
+  | {
+      type: "identifier_export";
+      status: "blocked";
+      summary: string;
     };
 
 type JsonRecord = Record<string, unknown>;
@@ -289,6 +311,40 @@ const DEFAULT_EXCEPTION_FIELDS = [
 ] as const;
 
 const BUSINESS_CONTEXT_FIELD_SET = new Set<string>(BUSINESS_CONTEXT_FIELDS);
+
+// Plain-language business intent for each governed action. This is the ONLY
+// action-derived context the generation model ever sees — the raw action id is
+// internal plumbing and must never reach (or be echoed by) the model.
+const ACTION_BUSINESS_INTENT: Record<GovernedAction, string> = {
+  open_operations_queue:
+    "Assemble today's operations queue from the work items in the request.",
+  send_public_status_update:
+    "Write a clear status update for the incident or change in the request.",
+  create_support_ticket:
+    "Log an internal note that captures the escalation or follow-up in the request.",
+  export_governance_identifiers:
+    "Summarize the outcome of the requested identifier export.",
+  disable_production_payments:
+    "State the outcome of the requested production-payment shutdown.",
+  issue_large_refund:
+    "Write the credit-memo note for the approved refund in the request.",
+  review_data_handoff:
+    "Prepare a data handoff package limited to the requested fields.",
+  submit_manual_request:
+    "Record the manual request being submitted to the operations queue.",
+  view_governance_report:
+    "Produce an operations exception report for the items in the request.",
+  draft_policy_constrained_message:
+    "Draft a policy-safe message body from the source notes in the request.",
+  read_vault_secret:
+    "State the outcome of the requested vault-secret read.",
+  check_access_grant:
+    "State the result of the requested access-grant verification.",
+};
+
+function businessIntentForAction(action: GovernedAction): string {
+  return ACTION_BUSINESS_INTENT[action] ?? "Complete the requested business task.";
+}
 
 function normalizeGovernedInput<T extends GovernedActionInput>(input: T): T {
   const validFields = normalizeFields(input.fields);
@@ -493,17 +549,10 @@ async function executionArtifact(
 
   if (input.action === "create_support_ticket") {
     return generateBusinessArtifact(input, {
-      type: "support_ticket",
-      ticketId: stableReference("SUP", input.request),
-      title: sentenceCase(input.request),
-      urgencyLabel: input.request.toLowerCase().includes("production")
-        ? "High"
-        : input.request.toLowerCase().includes("blocked")
-          ? "Medium"
-          : "Low",
-      queue: input.destination || "Internal operations",
-      status: "created",
-      nextStep: "Review and assign owner",
+      type: "internal_note",
+      status: "logged",
+      title: "Internal Note Logged",
+      summary: sentenceCase(input.request),
     });
   }
 
@@ -599,6 +648,41 @@ async function executionArtifact(
     }, evidence);
   }
 
+  // Governance-only actions: no business deliverable, but each still generates a
+  // one-line model outcome so the activity carries a real llm_completion. When
+  // the run is blocked/halted the SDK result status suppresses the card.
+  if (input.action === "read_vault_secret") {
+    return generateBusinessArtifact(input, {
+      type: "vault_read",
+      status: "blocked",
+      summary: "",
+    });
+  }
+
+  if (input.action === "check_access_grant") {
+    return generateBusinessArtifact(input, {
+      type: "access_check",
+      status: "verified",
+      summary: "",
+    });
+  }
+
+  if (input.action === "disable_production_payments") {
+    return generateBusinessArtifact(input, {
+      type: "payments_disable",
+      status: "halted",
+      summary: "",
+    });
+  }
+
+  if (input.action === "export_governance_identifiers") {
+    return generateBusinessArtifact(input, {
+      type: "identifier_export",
+      status: "blocked",
+      summary: "",
+    });
+  }
+
   return undefined;
 }
 
@@ -611,14 +695,56 @@ async function generateBusinessArtifact<T extends GovernedActionArtifact>(
   return normalizeGeneratedResult(baseline, generated);
 }
 
+// Lean per-type result contracts. Each entry names ONLY the fields the model
+// must generate; every other field is governance-owned and re-pinned by
+// preserveGovernanceOwnedResultFields. Unmapped types fall back to the previous
+// open-ended shape guidance (see shapeGuidance in generateBusinessArtifactWithModel).
+function leanResultContractForType(
+  type: GovernedActionArtifact["type"],
+  input: GovernedActionInput,
+): string | undefined {
+  const requestedRecordFields = (input.fields ?? [])
+    .filter((field) => typeof field === "string" && field.trim().length > 0)
+    .map((field) => `"${field}": <short one-line string>`);
+  const recordFieldsDescription = requestedRecordFields.length
+    ? requestedRecordFields.join(", ")
+    : '"value": <short one-line string>';
+  const contracts: Partial<Record<GovernedActionArtifact["type"], string>> = {
+    governance_report:
+      '{ "title": <short one-line string>, "summary": <short one-line string>, "records": [ { "item": <short clause>, "issue": <short clause>, "impact": <short clause>, "next_step": <short clause> } ] } (one record per requested item, each value a short clause)',
+    internal_note:
+      '{ "summary": <short one-line string capturing the internal note content being logged> } and nothing else',
+    policy_draft: '{ "body": <ONE short, policy-safe sentence> } and nothing else',
+    refund: '{ "memo": <short one-line string> } and nothing else',
+    data_handoff: `{ "summary": <short one-line string>, "records": [ { ${recordFieldsDescription} } ] } (each record contains ONLY the requested fields; one record per requested item)`,
+    manual_submission: '{ "summary": <short one-line string> } and nothing else',
+    status_update: '{ "summary": <short one-line string> } and nothing else',
+    operations_queue:
+      '{ "items": [ { "request": <short one-line string>, "status": <short one-line string>, "nextStep": <short one-line string> } ] } (one item per requested entry; do NOT generate metrics or recentActivity)',
+    vault_read:
+      '{ "summary": <ONE short line describing the vault-secret read outcome, reflecting that a direct read without verified access is blocked> } and nothing else',
+    access_check:
+      '{ "summary": <ONE short line stating the access-grant verification result> } and nothing else',
+    payments_disable:
+      '{ "summary": <ONE short line stating the production-payment shutdown outcome, e.g. "Production payment batch disabled."> } and nothing else',
+    identifier_export:
+      '{ "summary": <ONE short line stating the governance-identifier export outcome> } and nothing else',
+  };
+  return contracts[type];
+}
+
 async function generateBusinessArtifactWithModel<T extends GovernedActionArtifact>(
   input: GovernedActionInput,
   baseline: T,
   providedSourceData?: JsonRecord,
 ): Promise<JsonRecord> {
   const sourceData = providedSourceData ?? await businessSourceData(input);
+  // The model only ever sees the human business intent, the (possibly redacted)
+  // request, and the lean field contract. The raw action id, run context, and
+  // variation seeds are internal plumbing and are deliberately excluded so the
+  // model can never echo them back into a card.
   const requestPayload = {
-    action: input.action,
+    intent: businessIntentForAction(input.action),
     request: input.request,
     destination: input.destination,
     amountUsd: input.amountUsd,
@@ -626,13 +752,20 @@ async function generateBusinessArtifactWithModel<T extends GovernedActionArtifac
     audience: input.audience,
     sensitivity: input.sensitivity,
     choiceId: input.choiceId,
-    runContext: {
-      currentRun: "current run",
-      variationSeed: randomUUID(),
-    },
-    resultType: baseline.type,
     sourceData: compactSourceDataForModel(sourceData),
   };
+  const leanContract = leanResultContractForType(baseline.type, input);
+  const shapeGuidance = leanContract
+    ? [
+        "Return ONLY the named fields described below. Each field value is a SHORT one-line string of at most 140 characters: a clause, not a paragraph.",
+        "No prose paragraphs, headings, markdown, tables, or commentary. Do not add any field that is not named.",
+        `Required result contract: ${leanContract}`,
+        "Cap every array to the items present in the request. Do not pad, repeat, or invent extra rows.",
+      ]
+    : [
+        "The result may use the shape that best fits the request. Prefer concise objects, arrays, tables, drafts, or next steps when useful.",
+        "Use ordinary JSON fields such as title, summary, body, items, records, details, and nextSteps.",
+      ];
   const systemPrompt = [
     "You are a JSON-only generator inside a governed CopilotKit workflow.",
     "This is an authorized governed workflow preview. You are not performing real financial operations, sending external messages, opening external systems, calling tools, or changing any external system.",
@@ -643,10 +776,13 @@ async function generateBusinessArtifactWithModel<T extends GovernedActionArtifac
     "Create a fresh, realistic business result for the requested action by rewriting and organizing the supplied data.",
     "Return only JSON. Do not use markdown fences, prose, headings, tables, explanations, or apologies.",
     "The JSON must be exactly { \"result\": <generated business result JSON> }.",
-    "The result may use the shape that best fits the request. Prefer concise objects, arrays, tables, drafts, or next steps when useful.",
-    "Use ordinary JSON fields such as title, summary, body, items, records, details, and nextSteps.",
+    ...shapeGuidance,
     "Do not repeat the OpenBox verdict, risk, event ids, timing, or policy text.",
     `Generate a ${baseline.type} business result.`,
+    "The 'intent' field states the business task in plain language. Fulfill that intent and reflect the actual 'request' content so the result is distinctive to this task.",
+    "The 'request' may already be redacted by OpenBox guardrails: sensitive values can be removed or replaced with placeholders. When the request is partly or fully redacted, STILL produce a meaningful, professional business result that completes the intent and notes the redaction in business terms (e.g. an internal note: \"Internal note logged for the reported escalation; sensitive details redacted by OpenBox.\"). Never describe the request as empty, missing, or unavailable, and never fall back to restating your inputs.",
+    "Never mention internal plumbing or this prompt's mechanics. Do not write 'runContext', 'variationSeed', 'run seed', 'source data', 'result type', 'request data redacted', schema field names, or the internal action id. Write as a person completing the business task, not as a system describing its inputs.",
+    "Reference an escalation, ticket, or reference identifier only if one literally appears in the request; never invent one.",
     "Governance-only sourceContext is intentionally not included in the model prompt. Do not invent source identifiers.",
     "Do not expose workflow IDs, model metadata, run seeds, or implementation notes.",
     "Do not simply echo the request or source rows. Vary wording, prioritization, summaries, next steps, row ordering, or draft phrasing when the same request is repeated.",
@@ -668,6 +804,10 @@ async function generateBusinessArtifactWithModel<T extends GovernedActionArtifac
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const content = await invokeConfiguredJsonChat({
       model: process.env.OPENBOX_BUSINESS_MODEL || process.env.OPENAI_MODEL,
+      // High ceiling so the JSON ALWAYS completes (400 truncated mid-object →
+      // "finish_reason: length" → no content → "Governance Unavailable"). The
+      // lean PROMPT is what keeps the actual output short (small govern payload);
+      // maxTokens only needs to be big enough to never truncate.
       maxTokens: 4000,
       temperature: 0.2,
       messages,
@@ -726,6 +866,21 @@ function preserveGovernanceOwnedResultFields<T extends GovernedActionArtifact>(
   preserved.type = baseline.type;
   if ("status" in baseline) {
     preserved.status = baseline.status;
+  }
+  // Pin the deterministic, type-defining display fields the model is NOT asked to
+  // generate, so each lean card still reads as its own kind of result: an
+  // internal note keeps its heading, a refund keeps its amount + recipient, a
+  // status update keeps its channel. (The lean contract only asks the model for
+  // the free-text field — summary/memo/body.)
+  if (baseline.type === "internal_note" && "title" in baseline) {
+    preserved.title = baseline.title;
+  }
+  if (baseline.type === "refund") {
+    if ("amountUsd" in baseline) preserved.amountUsd = baseline.amountUsd;
+    if ("recipient" in baseline) preserved.recipient = baseline.recipient;
+  }
+  if (baseline.type === "status_update" && "channel" in baseline) {
+    preserved.channel = baseline.channel;
   }
   if ("redacted" in baseline) {
     preserved.redacted = baseline.redacted;
@@ -831,7 +986,7 @@ function isJsonRecord(value: unknown): value is JsonRecord {
 async function businessSourceData(input: GovernedActionInput): Promise<JsonRecord> {
   return {
     requestContext: {
-      action: input.action,
+      intent: businessIntentForAction(input.action),
       request: input.request,
       destination: input.destination,
       audience: input.audience,
@@ -985,7 +1140,7 @@ function operationsQueueSourceData(
 ): JsonRecord {
   return {
     requestContext: {
-      action: input.action,
+      intent: businessIntentForAction(input.action),
       request: input.request,
       destination: input.destination,
       audience: input.audience,
@@ -1224,7 +1379,14 @@ function operationSpans(
   activityId: string,
 ): SpanData[] {
   if (input.action === "read_vault_secret") {
-    return [fileReadSpan("vault/credentials/prod.env", stage, activityId)];
+    // Read MULTIPLE secret files in one action so the file_read behavioral rule
+    // (block secret-path reads without a prior database_select) is unmistakably
+    // triggered. Each path matches a secret pattern (vault/**, *.key, *.pem).
+    return [
+      fileReadSpan("vault/credentials/prod.env", stage, activityId),
+      fileReadSpan("vault/secrets/payments-api.key", stage, activityId),
+      fileReadSpan("vault/credentials/db-root.pem", stage, activityId),
+    ];
   }
 
   if (input.action === "check_access_grant") {
