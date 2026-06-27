@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 const OPENBOX_HALTED_STORAGE_KEY = "openbox-session-halted";
 const OPENBOX_HALTED_EVENT = "openbox-session-halted";
 
@@ -36,4 +38,21 @@ export function markOpenBoxSessionHalted(haltedAt?: unknown) {
 export function onOpenBoxSessionHalted(listener: () => void) {
   window.addEventListener(OPENBOX_HALTED_EVENT, listener);
   return () => window.removeEventListener(OPENBOX_HALTED_EVENT, listener);
+}
+
+export function isOpenBoxSessionHalted(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(OPENBOX_HALTED_STORAGE_KEY) === "true";
+}
+
+// Read the halt state reactively from any component (e.g. the suggestion chips,
+// which are rendered by CopilotChat outside the page's halt state). Mirrors the
+// page's own subscription so chips + input disable together on a halt.
+export function useIsOpenBoxHalted(): boolean {
+  const [halted, setHalted] = useState(false);
+  useEffect(() => {
+    setHalted(isOpenBoxSessionHalted());
+    return onOpenBoxSessionHalted(() => setHalted(true));
+  }, []);
+  return halted;
 }

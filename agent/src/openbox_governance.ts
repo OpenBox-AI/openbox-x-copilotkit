@@ -1,5 +1,6 @@
-import { AIMessage } from "@langchain/core/messages";
+import { AIMessage, SystemMessage } from "@langchain/core/messages";
 import { createMiddleware, type AgentMiddleware } from "langchain";
+import { copilotkitEmitToolCall } from "@copilotkit/sdk-js/langgraph";
 import { OpenBoxCoreClient } from "@openbox-ai/openbox-sdk";
 import {
   createOpenBoxCopilotKitAdapter,
@@ -52,6 +53,19 @@ export function createOpenBoxGovernanceMiddleware(): AgentMiddleware {
   return openBoxCopilotKitAdapter.createLangChainMiddleware({
     createMiddleware,
     AIMessage,
+    // Lets OpenBox inject a real LangChain system note when Core flags goal
+    // drift (alert-only) so the assistant acknowledges the off-goal request.
+    SystemMessage,
+    // CopilotKit v2 only renders a HITL tool (openboxApprovalReview) from a real
+    // streamed TOOL_CALL event. Hand the SDK CopilotKit's manual-emit so it can
+    // surface the approval card; the synthetic AIMessage alone never streams.
+    emitToolCall: (config, name, args, options) =>
+      copilotkitEmitToolCall(
+        config as Parameters<typeof copilotkitEmitToolCall>[0],
+        name,
+        args,
+        options,
+      ),
     // No deterministic pre-router: every prompt runs through the real model, so
     // the llm_call is a genuine captured call (real request/response/usage) and
     // the model itself decides which governed tool to call. The synthetic
