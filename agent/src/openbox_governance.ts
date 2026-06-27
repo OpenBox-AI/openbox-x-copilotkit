@@ -52,9 +52,17 @@ export function createOpenBoxGovernanceMiddleware(): AgentMiddleware {
   return openBoxCopilotKitAdapter.createLangChainMiddleware({
     createMiddleware,
     AIMessage,
-    routeLatestUserPrompt: routeOpenBoxDemoPrompt,
+    // No deterministic pre-router: every prompt runs through the real model, so
+    // the llm_call is a genuine captured call (real request/response/usage) and
+    // the model itself decides which governed tool to call. The synthetic
+    // `openbox_preflight_*` tool call (and the empty/orphaned llm_call it caused)
+    // is gone.
   }) as AgentMiddleware;
 }
+
+// Retained but intentionally unused: the deterministic demo router. Kept for
+// reference only — it is no longer wired into the middleware above.
+void routeOpenBoxDemoPrompt;
 
 export function isOpenBoxEnabled(): boolean {
   return openBoxCopilotKitAdapter.isEnabled();

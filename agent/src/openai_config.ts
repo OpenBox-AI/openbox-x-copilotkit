@@ -11,11 +11,16 @@ import {
 const openAIBaseUrl = process.env.OPENAI_BASE_URL;
 const openAIApiKey = process.env.OPENAI_API_KEY;
 
+// Default raised from 1024: reasoning models (gpt-5-nano) spend completion
+// tokens on internal reasoning first, so on a heavy prompt the whole 1024 was
+// consumed by reasoning_tokens and the call hit finish_reason:"length" with an
+// empty content and NO tool call — nothing for the frontend to render. 4096
+// leaves room to reason AND emit the tool call.
 const openAIMaxTokens = Number.parseInt(
-  process.env.OPENAI_MAX_TOKENS || "1024",
+  process.env.OPENAI_MAX_TOKENS || "4096",
   10,
 );
-const maxTokens = Number.isFinite(openAIMaxTokens) ? openAIMaxTokens : 1024;
+const maxTokens = Number.isFinite(openAIMaxTokens) ? openAIMaxTokens : 4096;
 const strictToolCalling = process.env.OPENAI_STRICT_TOOL_CALLING === "true";
 
 export function createConfiguredChatOpenAI(

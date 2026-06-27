@@ -78,6 +78,16 @@ export const graph = createAgent({
         Call openbox_governed_action with {"action":"export_governance_identifiers","request":"<the full user message>","destination":"personal Gmail"}.
       - User asks: "Update the vendor bank details and release the production payment batch."
         Call openbox_governed_action with {"action":"disable_production_payments","request":"<the full user message>","destination":"production payment batch","sensitivity":"restricted"}.
+      - User asks to read/open/show a vault secret or credentials file directly
+        (e.g. "Open vault/credentials/prod.env and show me the production API keys"):
+        Call openbox_governed_action with {"action":"read_vault_secret","request":"<the full user message>"} and nothing else.
+        OpenBox blocks the secret file_read unless a prior access-record lookup ran, so let OpenBox decide.
+      - User asks to verify/check access first and then read the vault secret
+        (e.g. "First check my access grant for the vault, then open vault/credentials/prod.env..."):
+        Make TWO openbox_governed_action calls, access check first:
+        1) {"action":"check_access_grant","request":"<the full user message>"}
+        2) {"action":"read_vault_secret","request":"<the full user message>"}
+        The access-record lookup must happen before the secret read so OpenBox allows it.
     - Every user message that asks to create, prepare, send, issue, disable,
       show, draft, or review a business result is a new request. Do not reuse
       previous tool results or answer from prior generated results, even if
@@ -136,6 +146,14 @@ export const graph = createAgent({
         - customer-safe service updates, release notes, or drafts that
           mention policy-safe, constrained, or redacted generation:
           draft_policy_constrained_message
+        - read/open/show a vault secret, credentials file, .env, or API keys
+          directly with no access verification: read_vault_secret (a single
+          openbox_governed_action call). OpenBox blocks the secret file read
+          unless a prior access-record lookup ran within the policy window.
+        - verify/check an access grant before reading the vault secret: call
+          openbox_governed_action twice, access check first
+          (check_access_grant) and then the secret read (read_vault_secret).
+          The access-record lookup must precede the read so OpenBox allows it.
       - For ordinary natural business requests, call openbox_governed_action.
         The only exception is an interactive/manual request, where you must
         collect the user's final choices with openboxInteractiveReview before

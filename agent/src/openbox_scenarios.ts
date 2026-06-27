@@ -16,6 +16,8 @@ const GOVERNED_ACTIONS = [
   "submit_manual_request",
   "view_governance_report",
   "draft_policy_constrained_message",
+  "read_vault_secret",
+  "check_access_grant",
 ] as const;
 const DIRECT_GOVERNED_ACTIONS = [
   "open_operations_queue",
@@ -27,6 +29,8 @@ const DIRECT_GOVERNED_ACTIONS = [
   "submit_manual_request",
   "view_governance_report",
   "draft_policy_constrained_message",
+  "read_vault_secret",
+  "check_access_grant",
 ] as const;
 const APPROVAL_GOVERNED_ACTIONS = ["issue_large_refund"] as const;
 const HANDOFF_CHOICES = ["minimal", "growth", "sensitive"] as const;
