@@ -10,6 +10,13 @@ loadDotEnvWithoutOverridingProcess();
 assertOpenBoxEnv();
 pruneOversizedLanggraphState();
 
+// The access-grant store uses node:sqlite, which is experimental on Node 22
+// (stable on Node 24+). Propagate the flag through NODE_OPTIONS so the graph
+// process the langgraph-cli spawns can load node:sqlite. Harmless on Node 24+.
+process.env.NODE_OPTIONS = [process.env.NODE_OPTIONS, '--experimental-sqlite']
+  .filter(Boolean)
+  .join(' ');
+
 const result = spawnSync(
   'npx',
   ['@langchain/langgraph-cli@1.2.1', 'dev', '--port', '8123', '--no-browser'],

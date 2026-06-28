@@ -1,15 +1,23 @@
 import { randomBytes } from "node:crypto";
-import { type SpanData, type WorkflowVerdict } from "@openbox-ai/openbox-sdk/core-client";
+import { fileURLToPath } from "node:url";
+import { type WorkflowVerdict } from "@openbox-ai/openbox-sdk/core-client";
 import {
   createGovernedCopilotTool,
-  databaseSelectSpan,
-  fileReadSpan,
+  tracedReadFileSync,
   type OpenBoxCopilotActionInput,
   type OpenBoxCopilotTimingEvent,
 } from "@openbox-ai/openbox-sdk/copilotkit";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { invokeConfiguredJsonChat } from "./openai_config.js";
 import { openBoxCopilotKitAdapter } from "./openbox_governance.js";
+import { lookupAccessGrant } from "./openbox_access_store.js";
+
+// Real secret-file path read by read_vault_secret so the SDK's file
+// instrumentation emits the file_operation (read) span Core's behavioral rule
+// gates. Resolved relative to this module so it works regardless of cwd.
+const VAULT_SECRET_PATH = fileURLToPath(
+  new URL("../fixtures/vault/prod.env", import.meta.url),
+);
 
 export type GovernedAction =
   | "open_operations_queue"
@@ -230,8 +238,6 @@ const governedCopilotTool = createGovernedCopilotTool<
   description: TOOL_DESCRIPTION,
   normalizeInput: normalizeGovernedInput,
   execute: async (input) => executionArtifact(input),
-  spanProfile,
-  operationSpans,
   onTimingEvent: emitOpenBoxTimingEvent,
 });
 
@@ -652,6 +658,15 @@ async function executionArtifact(
   // one-line model outcome so the activity carries a real llm_completion. When
   // the run is blocked/halted the SDK result status suppresses the card.
   if (input.action === "read_vault_secret") {
+    // Perform the REAL secret-file read so the SDK's file instrumentation emits
+    // the file_operation (read) span Core's behavioral rule gates (block
+    // secret-path reads without a prior database_select). The governance verdict
+    // — not the bytes — is the outcome; a missing fixture must not crash the demo.
+    try {
+      tracedReadFileSync(VAULT_SECRET_PATH, "utf8");
+    } catch {
+      // The instrumented wrapper still records the file span on a real attempt.
+    }
     return generateBusinessArtifact(input, {
       type: "vault_read",
       status: "blocked",
@@ -660,6 +675,15 @@ async function executionArtifact(
   }
 
   if (input.action === "check_access_grant") {
+    // Perform the REAL access-grant lookup so the SDK's sqlite instrumentation
+    // emits the db_query (database_select) span that satisfies Core's file-read
+    // behavioral rule when this runs before a vault read.
+    try {
+      await lookupAccessGrant("current_agent");
+    } catch {
+      // Store init failures must not crash the demo; the verdict still comes
+      // from Core based on whatever spans were captured.
+    }
     return generateBusinessArtifact(input, {
       type: "access_check",
       status: "verified",
@@ -1284,134 +1308,12 @@ function releasedAsForSensitiveValue(value: string): string {
   return "safe business context";
 }
 
-function envValue(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} is required for this OpenBox demo flow.`);
-  return value;
-}
-
-function coerceString(value: unknown, defaultValue: string): string {
-  return typeof value === "string" && value.trim() ? value.trim() : defaultValue;
-}
-
-function spanProfile(input: GovernedActionInput): Pick<SpanData, "name" | "kind" | "attributes"> {
-  if (input.action === "view_governance_report") {
-    return {
-      name: "openbox.governance_report.read",
-      kind: "client",
-      attributes: {
-        "openbox.operation": "read_governance_report",
-        "openbox.agent_id": envValue("OPENBOX_AGENT_ID"),
-      },
-    };
-  }
-
-  if (input.action === "review_data_handoff") {
-    return businessSpan("openbox.vendor_review.prepare_handoff", {
-      "openbox.operation": "prepare_vendor_review_handoff",
-      "openbox.destination": coerceString(input.destination, "External review workspace"),
-    });
-  }
-
-  if (input.action === "export_governance_identifiers") {
-    return businessSpan("openbox.governance_identifiers.export_request", {
-      "openbox.operation": "request_governance_identifier_export",
-      "openbox.destination": coerceString(input.destination, "external destination"),
-    });
-  }
-
-  if (input.action === "issue_large_refund") {
-    return businessSpan("openbox.credit_memo.review", {
-      "openbox.operation": "review_credit_memo",
-      "openbox.amount_usd": input.amountUsd,
-    });
-  }
-
-  if (input.action === "disable_production_payments") {
-    return businessSpan("openbox.vendor_payment_change.review", {
-      "openbox.operation": "review_vendor_payment_change",
-      "openbox.sensitivity": "restricted",
-    });
-  }
-
-  if (input.action === "open_operations_queue") {
-    return {
-      name: "openbox.governed_operations_queue.read",
-      kind: "client",
-      attributes: {
-        "openbox.operation": "read_governed_operations_queue",
-        "openbox.agent_id": envValue("OPENBOX_AGENT_ID"),
-      },
-    };
-  }
-
-  if (input.action === "read_vault_secret") {
-    return businessSpan("openbox.vault_secret.read", {
-      "openbox.operation": "read_vault_secret",
-      "openbox.sensitivity": "restricted",
-    });
-  }
-
-  if (input.action === "check_access_grant") {
-    return businessSpan("openbox.access_grant.lookup", {
-      "openbox.operation": "lookup_access_grant",
-    });
-  }
-
-  return {
-    name: `internal.${input.action}`,
-    kind: "internal",
-    attributes: {
-      "openbox.span.category": "internal_workflow",
-    },
-  };
-}
-
-// Emit the underlying operation spans OpenBox Core uses for behavioral rules.
-// The platform blocks `file_read` of secret paths (.env, secrets/**,
-// credentials/**, vault/**, *.pem, *.key) unless a prior `database_select`
-// access-record lookup happened within 300s. read_vault_secret emits the
-// file_read span; check_access_grant emits the database_select span that
-// satisfies the rule when it runs first.
-function operationSpans(
-  input: GovernedActionInput,
-  stage: "started" | "completed",
-  activityId: string,
-): SpanData[] {
-  if (input.action === "read_vault_secret") {
-    // Read MULTIPLE secret files in one action so the file_read behavioral rule
-    // (block secret-path reads without a prior database_select) is unmistakably
-    // triggered. Each path matches a secret pattern (vault/**, *.key, *.pem).
-    return [
-      fileReadSpan("vault/credentials/prod.env", stage, activityId),
-      fileReadSpan("vault/secrets/payments-api.key", stage, activityId),
-      fileReadSpan("vault/credentials/db-root.pem", stage, activityId),
-    ];
-  }
-
-  if (input.action === "check_access_grant") {
-    return [
-      databaseSelectSpan(
-        "SELECT grant_id, scope FROM access_grants WHERE subject = current_agent()",
-        stage,
-        activityId,
-      ),
-    ];
-  }
-
-  return [];
-}
-
-function businessSpan(
-  name: string,
-  attributes: Record<string, unknown>,
-): Pick<SpanData, "name" | "kind" | "attributes"> {
-  return {
-    name,
-    kind: "client",
-    attributes,
-  };
-}
+// Note: per-action `spanProfile` and the hand-written `operationSpans`
+// (file_read / database_select) were removed. The governed tool now performs the
+// REAL file read (read_vault_secret) and the REAL SQL lookup
+// (check_access_grant) through the SDK's instrumented entry points, so those
+// operation spans are captured automatically and submitted as canonical
+// hook_trigger evaluations — no hand-declared spans.
 
 function stableReference(prefix: string, seed: string): string {
   const digest = randomBytes(2).toString("hex").toUpperCase();

@@ -1,6 +1,6 @@
 {
-  "node_version": "20",
-  "dockerfile_lines": [],
+  "node_version": "22",
+  "dockerfile_lines": ["ENV NODE_OPTIONS=--experimental-sqlite"],
   "dependencies": ["."],
   "graphs": {
     "openbox_copilotkit_agent": "./src/agent.ts:graph"

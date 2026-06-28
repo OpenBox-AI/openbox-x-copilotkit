@@ -9,10 +9,10 @@ import {
   createOpenBoxCopilotRuntime,
 } from "@openbox-ai/openbox-sdk/copilotkit";
 
-// Demo parity with the Temporal/OTel reference: the real provider exchange is
-// captured at the agent's model client and becomes the authoritative
-// llm_completion span, so this runtime process suppresses its reconstructed
-// span and stores captured headers verbatim (no redaction).
+// Capture mode (canonical LLM spanning): the assistant gate emits the full
+// started+completed llm_completion pair from the real provider exchange, and the
+// prompt gate's reconstructed started span is suppressed to avoid a duplicate.
+// Raw headers mirror the canonical prod-data capture fidelity.
 process.env.OPENBOX_LLM_SPANS_FROM_CAPTURE ??= "true";
 process.env.OPENBOX_CAPTURE_RAW_HEADERS ??= "true";
 
