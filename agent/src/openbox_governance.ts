@@ -10,9 +10,9 @@ import {
 // Capture mode (canonical LLM spanning): the assistant gate emits the full
 // started+completed llm_completion pair from the real provider exchange, and the
 // prompt gate's reconstructed started span is suppressed to avoid a duplicate.
-// Raw headers mirror the canonical prod-data capture fidelity.
+// Sensitive headers are always redacted by the SDK (canonical _sanitize_headers);
+// there is no raw-header opt-out.
 process.env.OPENBOX_LLM_SPANS_FROM_CAPTURE ??= "true";
-process.env.OPENBOX_CAPTURE_RAW_HEADERS ??= "true";
 
 const WORKFLOW_TYPE = "CopilotKitLangGraphAgent";
 const TASK_QUEUE = "copilotkit-langgraph";

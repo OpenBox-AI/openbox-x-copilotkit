@@ -14,7 +14,9 @@ const log = (...a) => console.log("[e2e]", ...a);
 
 async function main() {
   const browser = await chromium.launch({
-    channel: "chrome",
+    // Use Playwright's bundled chromium (no system Chrome / sudo needed). Set
+    // PLAYWRIGHT_CHANNEL=chrome to opt back into system Chrome.
+    ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}),
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
   const page = await browser.newPage();
