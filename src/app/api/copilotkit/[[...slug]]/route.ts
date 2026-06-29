@@ -58,6 +58,11 @@ const openboxRuntime = createOpenBoxCopilotRuntime({
   runtime,
   runner: runner as any,
   agents: ["default"],
+  // The langgraph agent runs the OpenBox LangChain middleware, so it owns the
+  // llm_call assistant gate (with the real captured exchange). Tell the runtime
+  // to stream the agent's already-governed output instead of re-evaluating it —
+  // single-owner split, no assistant-output double-governance.
+  assistantOutputOwner: "agent",
   adapter: createOpenBoxCopilotKitAdapter({
     agentWorkflowType: "CopilotKitRuntime",
     taskQueue: "copilotkit-runtime",
