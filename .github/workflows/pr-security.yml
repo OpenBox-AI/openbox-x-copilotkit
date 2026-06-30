@@ -134,8 +134,7 @@ jobs:
           PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          
-          # --- 1. Logic tính toán commit gốc của bạn ---
+
           log_opts="-1"
           if [[ "${GITHUB_EVENT_NAME}" == "pull_request" && -n "${PULL_REQUEST_BASE_SHA}" ]]; then
             log_opts="${PULL_REQUEST_BASE_SHA}..HEAD"
@@ -143,13 +142,9 @@ jobs:
             log_opts="${PUSH_BEFORE_SHA}..HEAD"
           fi
           
-          # --- 2. Mở thẻ cho GitHub Summary ---
           echo "### Gitleaks Git Scan Results 🕵️‍♂️" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
           
-          # --- 3. Chạy Gitleaks và bắt kết quả ---
-          # Thêm 2>&1 để bắt cả log lỗi (nếu có)
-          # Thêm --no-color để Summary không bị dính mã màu
           EXIT_CODE=0
           gitleaks git . \
             --config .gitleaks.toml \
@@ -161,7 +156,6 @@ jobs:
             --no-color \
             --no-banner 2>&1 | tee -a $GITHUB_STEP_SUMMARY || EXIT_CODE=$?
             
-          # --- 4. Đóng thẻ và in kết luận ---
           echo '```' >> $GITHUB_STEP_SUMMARY
           
           if [ $EXIT_CODE -eq 0 ]; then
@@ -170,7 +164,6 @@ jobs:
             echo "**Result:** Potential secrets detected ❌" >> $GITHUB_STEP_SUMMARY
           fi
           
-          # --- 5. Đánh fail step nếu tìm thấy lỗi ---
           exit $EXIT_CODE
 
       - name: Ensure Gitleaks SARIF file exists
