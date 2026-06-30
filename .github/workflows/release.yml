@@ -222,20 +222,6 @@ jobs:
           cache: true
           version: v0.69.2
 
-      - name: Run Trivy filesystem scan for console output
-        id: trivy_console
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          trivy fs . \
-            --scanners vuln,misconfig \
-            --vuln-type os,library \
-            --ignore-unfixed \
-            --severity HIGH,CRITICAL \
-            --include-dev-deps \
-            --format table \
-            --exit-code 1
 
       - name: Run Trivy filesystem scan for console output
         id: trivy_console
@@ -257,6 +243,23 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
         
           exit ${EXIT_CODE:-0}
+
+      - name: Run Trivy filesystem scan for SARIF
+        id: trivy_sarif
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          trivy fs . \
+            --scanners vuln,misconfig \
+            --vuln-type os,library \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --include-dev-deps \
+            --format sarif \
+            --output trivy-release-results.sarif \
+            --exit-code 1
 
       - name: Upload Trivy SARIF to GitHub Security
         if: always()
